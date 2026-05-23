@@ -16,6 +16,12 @@
         href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
+  <!-- ╔══════════════════════════════════════════════════════════════════╗
+       ║  TURF.JS — obliczenia geometryczne (CDN)                         ║
+       ║  Lokalnie: pobierz turf.min.js → src="./turf.min.js"            ║
+       ╚══════════════════════════════════════════════════════════════════╝ -->
+  <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
+
   <style>
     /* ─── RESET ─── */
     *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
@@ -121,6 +127,13 @@
       background: linear-gradient(135deg,#f97316,#ea580c);
       box-shadow: 0 6px 22px rgba(249,115,22,0.40);
     }
+    #btn-clear-route {
+      padding: 11px 22px; font-size: 13px; color: #93c5fd;
+      background: rgba(15,23,42,0.82);
+      backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(37,99,235,0.30);
+      box-shadow: 0 4px 18px rgba(0,0,0,0.35); display: none;
+    }
     #btn-add.active {
       background: linear-gradient(135deg,#ea580c,#c2410c);
       box-shadow: 0 0 0 3px rgba(249,115,22,0.45), 0 6px 22px rgba(249,115,22,0.35);
@@ -181,6 +194,14 @@
       font-family:inherit; transition:background 0.2s;
     }
     .popup-delete:hover { background:rgba(239,68,68,0.22); }
+    .popup-nav {
+      display:flex; align-items:center; justify-content:center; gap:6px;
+      width:100%; padding:8px; border-radius:8px; cursor:pointer;
+      background:rgba(37,99,235,0.12); border:1px solid rgba(37,99,235,0.28);
+      color:#93c5fd; font-size:13px; font-weight:600;
+      font-family:inherit; transition:background 0.2s; margin-bottom:8px;
+    }
+    .popup-nav:hover { background:rgba(37,99,235,0.24); }
 
     /* ─── MODAL — dodaj miejsce ─── */
     #modal-overlay {
@@ -309,6 +330,13 @@
         <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
       </svg>
       Dodaj miejsce
+    </button>
+    <button class="btn" id="btn-clear-route">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+           stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+        <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+      </svg>
+      Wyczyść trasę
     </button>
     <button class="btn" id="btn-places">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
@@ -494,6 +522,7 @@
     marker.bindPopup(
       '<div class="popup-name">' + safe + '</div>' +
       '<div class="popup-coords">' + place.lat.toFixed(5) + ', ' + place.lng.toFixed(5) + '</div>' +
+      '<button class="popup-nav" onclick="handleNavigate(' + place.lng.toFixed(7) + ',' + place.lat.toFixed(7) + ')">🧭 Nawiguj tutaj</button>' +
       '<button class="popup-delete" onclick="handleDelete(\'' + place.id + '\')">🗑 Usuń miejsce</button>',
       { maxWidth: 220, className: '' }
     );
@@ -711,6 +740,236 @@
   });
 
   // ════════════════════════════════════════════════════════════════════
+  //  NAWIGACJA — HYBRYDOWY ALGORYTM (SIEĆ DRÓG + LINIA PROSTA)
+  // ════════════════════════════════════════════════════════════════════
+  let roadGraph   = null;
+  let routeLayers = [];
+  const btnClearRoute = document.getElementById('btn-clear-route');
+
+  // ── Wstaw punkt przecięcia w segment linii ──
+  function insertPointIntoLine(coords, pt) {
+    let bestIdx = 0, bestDist = Infinity;
+    for (let i = 0; i < coords.length - 1; i++) {
+      try {
+        const snap = turf.nearestPointOnLine(
+          turf.lineString([coords[i], coords[i + 1]]),
+          turf.point(pt)
+        );
+        if (snap.properties.dist < bestDist) {
+          bestDist = snap.properties.dist;
+          bestIdx  = i;
+        }
+      } catch(e) {}
+    }
+    const T = 0.00008;
+    const nA = coords[bestIdx],     nearA = Math.abs(nA[0]-pt[0])<T && Math.abs(nA[1]-pt[1])<T;
+    const nB = coords[bestIdx + 1], nearB = nB && Math.abs(nB[0]-pt[0])<T && Math.abs(nB[1]-pt[1])<T;
+    if (!nearA && !nearB) coords.splice(bestIdx + 1, 0, [pt[0], pt[1]]);
+  }
+
+  // ── Budowanie grafu z sieci GeoJSON + wykrywanie przecięć ──
+  function buildRoadGraph(geojson) {
+    const lines     = geojson.features.filter(f => f.geometry.type === 'LineString');
+    const lineCoords = lines.map(l => l.geometry.coordinates.map(c => [c[0], c[1]]));
+
+    // Znajdź przecięcia geometryczne między każdą parą linii
+    for (let i = 0; i < lines.length; i++) {
+      for (let j = i + 1; j < lines.length; j++) {
+        try {
+          const ix = turf.lineIntersect(lines[i], lines[j]);
+          ix.features.forEach(function(pt) {
+            insertPointIntoLine(lineCoords[i], pt.geometry.coordinates);
+            insertPointIntoLine(lineCoords[j], pt.geometry.coordinates);
+          });
+        } catch(e) {}
+      }
+    }
+
+    // Snap współrzędnych do węzłów grafu (tolerancja ~4 m)
+    const SNAP = 0.00004;
+    const graph = {}, nodeCoords = {};
+
+    function key(c) {
+      return (Math.round(c[1]/SNAP)*SNAP).toFixed(6) + ',' +
+             (Math.round(c[0]/SNAP)*SNAP).toFixed(6);
+    }
+
+    lineCoords.forEach(function(coords) {
+      for (var i = 0; i < coords.length - 1; i++) {
+        var a = coords[i], b = coords[i + 1];
+        var ka = key(a), kb = key(b);
+        nodeCoords[ka] = a;
+        nodeCoords[kb] = b;
+        var d = turf.distance(turf.point(a), turf.point(b), {units: 'meters'});
+        if (d < 0.1) continue;
+        if (!graph[ka]) graph[ka] = [];
+        if (!graph[kb]) graph[kb] = [];
+        graph[ka].push({to: kb, dist: d});
+        graph[kb].push({to: ka, dist: d});
+      }
+    });
+
+    return { graph, nodeCoords, key };
+  }
+
+  // ── Algorytm Dijkstry — najkrótsza trasa po sieci ──
+  function dijkstra(startKey, endKey) {
+    var g = roadGraph.graph, nc = roadGraph.nodeCoords;
+    if (!g[startKey] || !g[endKey]) return null;
+    if (startKey === endKey) return [nc[startKey]];
+
+    var dist = {}, prev = {}, visited = new Set();
+    Object.keys(g).forEach(function(k) { dist[k] = Infinity; });
+    dist[startKey] = 0;
+    var queue = [{key: startKey, d: 0}];
+
+    while (queue.length) {
+      queue.sort(function(a, b) { return a.d - b.d; });
+      var u = queue.shift().key;
+      if (visited.has(u)) continue;
+      visited.add(u);
+      if (u === endKey) break;
+      (g[u] || []).forEach(function(edge) {
+        var alt = dist[u] + edge.dist;
+        if (alt < (dist[edge.to] !== undefined ? dist[edge.to] : Infinity)) {
+          dist[edge.to] = alt;
+          prev[edge.to] = u;
+          queue.push({key: edge.to, d: alt});
+        }
+      });
+    }
+
+    if (!isFinite(dist[endKey])) return null;
+    var path = [], cur = endKey;
+    while (cur) { path.unshift(nc[cur]); cur = prev[cur] || null; }
+    return path;
+  }
+
+  // ── Najbliższy węzeł grafu do podanego punktu ──
+  function findNearestNode(coord) {
+    var bestKey = null, bestDist = Infinity;
+    Object.keys(roadGraph.nodeCoords).forEach(function(k) {
+      var d = turf.distance(turf.point(coord), turf.point(roadGraph.nodeCoords[k]), {units: 'meters'});
+      if (d < bestDist) { bestDist = d; bestKey = k; }
+    });
+    return { key: bestKey, coord: roadGraph.nodeCoords[bestKey], dist: bestDist };
+  }
+
+  // ── Rysowanie trasy awaryjnej (linia prosta / azymut) ──
+  function drawStraightRoute(from, to, label) {
+    routeLayers.push(L.polyline(
+      [[from[1], from[0]], [to[1], to[0]]],
+      {color: '#2563eb', weight: 3, dashArray: '10 8', opacity: 0.85}
+    ).addTo(map));
+    var dist = Math.round(turf.distance(turf.point(from), turf.point(to), {units: 'meters'}));
+    map.fitBounds([[from[1],from[0]], [to[1],to[0]]], {padding: [60, 60]});
+    showToast('🧭 ' + (label || 'Linia prosta') + ': ' + dist + ' m', 'ok');
+    btnClearRoute.style.display = 'flex';
+  }
+
+  // ── Wyczyść trasę z mapy ──
+  function clearRoute() {
+    routeLayers.forEach(function(l) { map.removeLayer(l); });
+    routeLayers = [];
+    btnClearRoute.style.display = 'none';
+  }
+
+  // ── Główna funkcja nawigacji ──
+  function navigateTo(destCoord) {
+    clearRoute();
+
+    if (userLat === null) {
+      showToast('⚠ Uruchom GPS przed nawigacją', 'err');
+      return;
+    }
+
+    var userCoord  = [userLng, userLat];
+    var MAX_SNAP   = 300; // m — próg poza siecią dróg
+
+    // Brak załadowanej sieci → linia prosta
+    if (!roadGraph || !Object.keys(roadGraph.graph).length) {
+      drawStraightRoute(userCoord, destCoord, 'Brak sieci – linia prosta');
+      return;
+    }
+
+    var uN = findNearestNode(userCoord);
+    var dN = findNearestNode(destCoord);
+
+    // Zbyt daleko od sieci → linia prosta
+    if (uN.dist > MAX_SNAP || dN.dist > MAX_SNAP) {
+      drawStraightRoute(userCoord, destCoord, 'Poza siecią – linia prosta');
+      return;
+    }
+
+    var path = dijkstra(uN.key, dN.key);
+
+    // Sieć nieciągła → linia prosta
+    if (!path || path.length < 1) {
+      drawStraightRoute(userCoord, destCoord, 'Sieć nieciągła – linia prosta');
+      return;
+    }
+
+    // ── Krok 1: kreskowana linia dojścia użytkownik → wejście na sieć ──
+    if (uN.dist > 3) {
+      routeLayers.push(L.polyline(
+        [[userLat, userLng], [uN.coord[1], uN.coord[0]]],
+        {color: '#2563eb', weight: 2.5, dashArray: '7 9', opacity: 0.78}
+      ).addTo(map));
+    }
+
+    // ── Krok 2: gruba ciągła linia po sieci dróg ──
+    if (path.length >= 2) {
+      routeLayers.push(L.polyline(
+        path.map(function(c) { return [c[1], c[0]]; }),
+        {color: '#2563eb', weight: 5, opacity: 0.92}
+      ).addTo(map));
+    }
+
+    // ── Krok 3: kreskowana linia wyjście z sieci → cel ──
+    if (dN.dist > 3) {
+      routeLayers.push(L.polyline(
+        [[dN.coord[1], dN.coord[0]], [destCoord[1], destCoord[0]]],
+        {color: '#2563eb', weight: 2.5, dashArray: '7 9', opacity: 0.78}
+      ).addTo(map));
+    }
+
+    // Dopasuj widok
+    var allPts = [[userLat, userLng]].concat(
+      path.map(function(c) { return [c[1], c[0]]; }),
+      [[destCoord[1], destCoord[0]]]
+    );
+    map.fitBounds(allPts, {padding: [40, 40]});
+
+    // Podsumowanie odległości
+    var roadDist = path.length >= 2
+      ? turf.length(turf.lineString(path), {units: 'meters'}) : 0;
+    var totalDist = Math.round(uN.dist + roadDist + dN.dist);
+    showToast('🧭 Trasa: ~' + totalDist + ' m', 'ok');
+    btnClearRoute.style.display = 'flex';
+  }
+
+  // Wołane z popupu markera miejsca
+  window.handleNavigate = function(lng, lat) {
+    map.closePopup();
+    navigateTo([lng, lat]);
+  };
+
+  btnClearRoute.addEventListener('click', clearRoute);
+
+  // Ładowanie sieci dróg z pliku GeoJSON
+  async function loadRoadNetwork() {
+    try {
+      var res    = await fetch('./drogi.json');
+      var geojson = await res.json();
+      roadGraph  = buildRoadGraph(geojson);
+      var nCount = Object.keys(roadGraph.graph).length;
+      console.log('Sieć dróg: ' + nCount + ' węzłów w grafie');
+    } catch(e) {
+      console.warn('Błąd ładowania sieci dróg:', e.message);
+    }
+  }
+
+  // ════════════════════════════════════════════════════════════════════
   //  STARTUP
   // ════════════════════════════════════════════════════════════════════
   (async function init() {
@@ -718,6 +977,9 @@
     hintEl.textContent = '📍 Naciśnij „Dodaj miejsce", aby oznaczyć lokalizację';
     hintEl.classList.add('show');
     setTimeout(function(){ if (!addMode) hintEl.classList.remove('show'); }, 4000);
+
+    // Załaduj sieć dróg do grafu nawigacyjnego
+    await loadRoadNetwork();
 
     // Utwórz pola lat/lng w Airtable (jeśli nie istnieją)
     await initFields();
