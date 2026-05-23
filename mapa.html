@@ -8,23 +8,17 @@
 
   <!-- ╔══════════════════════════════════════════════════════════════════╗
        ║  LEAFLET — CDN (wymień na pliki lokalne dla trybu OFFLINE):      ║
-       ║                                                                  ║
-       ║  1. Pobierz leaflet.css → umieść obok mapa.html                 ║
-       ║     Zmień href na:  "./leaflet.css"                              ║
-       ║                                                                  ║
-       ║  2. Pobierz leaflet.js  → umieść obok mapa.html                 ║
-       ║     Zmień src  na:  "./leaflet.js"                               ║
-       ║                                                                  ║
-       ║  Pobierz z:  https://leafletjs.com/download.html                ║
+       ║  1. Pobierz leaflet.css → href="./leaflet.css"                   ║
+       ║  2. Pobierz leaflet.js  → src="./leaflet.js"                     ║
+       ║  Pobierz z:  https://leafletjs.com/download.html                 ║
        ╚══════════════════════════════════════════════════════════════════╝ -->
-   <link rel="stylesheet"
-        href="./leaflet.css" />
-  <script src="./leaflet.js"></script>
+  <link rel="stylesheet"
+        href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
   <style>
-    /* ─── RESET & BASE ─── */
+    /* ─── RESET ─── */
     *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
-
     html, body {
       width: 100%; height: 100%;
       overflow: hidden;
@@ -34,224 +28,248 @@
     }
 
     /* ─── MAPA ─── */
-    #map {
-      position: fixed;
-      inset: 0;
-      z-index: 1;
-      background: #1e293b;
-    }
+    #map { position: fixed; inset: 0; z-index: 1; background: #1e293b; }
 
-    /* ─── PASEK STATUSU ─── */
+    /* ─── PASEK STATUSU GPS ─── */
     #status-bar {
       position: fixed;
-      top: env(safe-area-inset-top, 16px);
       top: max(env(safe-area-inset-top, 0px), 16px);
-      left: 50%;
-      transform: translateX(-50%);
+      left: 50%; transform: translateX(-50%);
       z-index: 1000;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      background: rgba(15, 23, 42, 0.80);
-      backdrop-filter: blur(14px);
-      -webkit-backdrop-filter: blur(14px);
-      border: 1px solid rgba(255, 255, 255, 0.10);
+      display: flex; align-items: center; gap: 8px;
+      background: rgba(15,23,42,0.82);
+      backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+      border: 1px solid rgba(255,255,255,0.10);
       border-radius: 999px;
       padding: 9px 18px 9px 14px;
-      color: #e2e8f0;
-      font-size: 12px;
-      font-weight: 500;
-      letter-spacing: 0.015em;
-      white-space: nowrap;
-      max-width: 92vw;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      box-shadow: 0 4px 24px rgba(0, 0, 0, 0.40);
-      transition: background 0.3s;
+      color: #e2e8f0; font-size: 12px; font-weight: 500;
+      letter-spacing: 0.015em; white-space: nowrap;
+      max-width: 92vw; overflow: hidden; text-overflow: ellipsis;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.40);
     }
-
-    /* Wskaźnik stanu */
     #status-dot {
-      flex-shrink: 0;
-      width: 8px; height: 8px;
-      border-radius: 50%;
-      background: #475569;
+      flex-shrink: 0; width: 8px; height: 8px;
+      border-radius: 50%; background: #475569;
       transition: background 0.3s;
     }
     #status-bar.tracking  #status-dot { background: #3b82f6; animation: blink 1.6s ease-in-out infinite; }
     #status-bar.error     #status-dot { background: #ef4444; }
     #status-bar.locating  #status-dot { background: #f59e0b; animation: blink 0.7s ease-in-out infinite; }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.2} }
 
-    @keyframes blink {
-      0%, 100% { opacity: 1; }
-      50%       { opacity: 0.25; }
+    /* ─── WSKAZÓWKA "PRZYTRZYMAJ" ─── */
+    #hint {
+      position: fixed; top: 68px; left: 50%; transform: translateX(-50%);
+      z-index: 1000;
+      background: rgba(15,23,42,0.78); color: #94a3b8;
+      font-size: 11px; padding: 6px 14px; border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.08);
+      white-space: nowrap; pointer-events: none;
+      opacity: 0; transition: opacity 0.5s;
     }
+    #hint.show { opacity: 1; }
 
     /* ─── PRZYCISKI ─── */
     #controls {
       position: fixed;
       bottom: max(env(safe-area-inset-bottom, 0px), 28px);
-      left: 50%;
-      transform: translateX(-50%);
+      left: 50%; transform: translateX(-50%);
       z-index: 1000;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 10px;
+      display: flex; flex-direction: column; align-items: center; gap: 10px;
     }
-
     .btn {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 9px;
-      border: none;
-      border-radius: 999px;
-      font-family: inherit;
-      font-weight: 600;
-      cursor: pointer;
-      transition: transform 0.12s ease, opacity 0.2s ease, box-shadow 0.2s;
+      display: flex; align-items: center; justify-content: center; gap: 9px;
+      border: none; border-radius: 999px;
+      font-family: inherit; font-weight: 600; cursor: pointer;
+      transition: transform 0.12s ease, box-shadow 0.2s;
       -webkit-tap-highlight-color: transparent;
-      user-select: none;
-      -webkit-user-select: none;
+      user-select: none; -webkit-user-select: none;
     }
-    .btn:active  { transform: scale(0.94); }
+    .btn:active { transform: scale(0.94); }
     .btn:disabled { opacity: 0.55; cursor: not-allowed; transform: none; }
-
-    /* Główny przycisk GPS */
     #btn-locate {
-      padding: 15px 30px;
-      font-size: 16px;
-      color: #fff;
-      background: linear-gradient(135deg, #2563eb, #1d4ed8);
-      box-shadow: 0 6px 28px rgba(37, 99, 235, 0.50);
+      padding: 15px 30px; font-size: 16px; color: #fff;
+      background: linear-gradient(135deg,#2563eb,#1d4ed8);
+      box-shadow: 0 6px 28px rgba(37,99,235,0.50);
     }
-    #btn-locate:not(:disabled):hover {
-      box-shadow: 0 8px 32px rgba(37, 99, 235, 0.65);
-    }
-
-    /* Przycisk "Centruj" */
     #btn-center {
-      padding: 11px 22px;
-      font-size: 13px;
-      color: #e2e8f0;
-      background: rgba(15, 23, 42, 0.78);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
-      border: 1px solid rgba(255, 255, 255, 0.12);
-      box-shadow: 0 4px 18px rgba(0,0,0,0.35);
-      display: none;
+      padding: 11px 22px; font-size: 13px; color: #e2e8f0;
+      background: rgba(15,23,42,0.78);
+      backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255,255,255,0.12);
+      box-shadow: 0 4px 18px rgba(0,0,0,0.35); display: none;
     }
-
-    /* Przycisk "Stop" */
     #btn-stop {
-      padding: 11px 22px;
-      font-size: 13px;
-      color: #fecaca;
-      background: rgba(127, 29, 29, 0.80);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
-      border: 1px solid rgba(239, 68, 68, 0.30);
-      box-shadow: 0 4px 18px rgba(0,0,0,0.30);
-      display: none;
+      padding: 11px 22px; font-size: 13px; color: #fecaca;
+      background: rgba(127,29,29,0.80);
+      backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(239,68,68,0.30);
+      box-shadow: 0 4px 18px rgba(0,0,0,0.30); display: none;
+    }
+    #btn-places {
+      padding: 11px 20px; font-size: 13px; color: #fff;
+      background: linear-gradient(135deg,#f97316,#ea580c);
+      box-shadow: 0 4px 18px rgba(249,115,22,0.35); display: none;
     }
 
     /* ─── NIEBIESKA KROPKA GPS ─── */
-    .gps-wrapper {
-      position: relative;
-      width: 24px; height: 24px;
-    }
+    .gps-wrapper { position:relative; width:24px; height:24px; }
     .gps-dot {
-      position: absolute;
-      top: 50%; left: 50%;
-      transform: translate(-50%, -50%);
-      width: 16px; height: 16px;
-      background: #2563eb;
-      border: 3px solid #fff;
-      border-radius: 50%;
-      box-shadow: 0 2px 10px rgba(37, 99, 235, 0.55);
-      z-index: 2;
+      position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+      width:16px; height:16px; background:#2563eb; border:3px solid #fff;
+      border-radius:50%; box-shadow:0 2px 10px rgba(37,99,235,0.55); z-index:2;
     }
     .gps-pulse {
-      position: absolute;
-      top: 50%; left: 50%;
-      transform: translate(-50%, -50%);
-      width: 24px; height: 24px;
-      border-radius: 50%;
-      background: rgba(37, 99, 235, 0.40);
-      z-index: 1;
+      position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+      width:24px; height:24px; border-radius:50%;
+      background:rgba(37,99,235,0.40); z-index:1;
       animation: pulse-ring 2.2s ease-out infinite;
     }
     @keyframes pulse-ring {
-      0%   { transform: translate(-50%,-50%) scale(0.8); opacity: 0.9; }
-      70%  { transform: translate(-50%,-50%) scale(3.0); opacity: 0;   }
-      100% { transform: translate(-50%,-50%) scale(3.0); opacity: 0;   }
+      0%  { transform:translate(-50%,-50%) scale(0.8); opacity:0.9; }
+      70% { transform:translate(-50%,-50%) scale(3.0); opacity:0;   }
+      100%{ transform:translate(-50%,-50%) scale(3.0); opacity:0;   }
     }
 
-    /* ─── IKONA ŁADOWANIA ─── */
-    .spin {
-      animation: spin 0.9s linear infinite;
-      display: inline-block;
+    /* ─── MARKER MIEJSCA (pomarańczowa kropka) ─── */
+    .place-dot {
+      width:16px; height:16px; background:#f97316; border:3px solid #fff;
+      border-radius:50%; box-shadow:0 2px 10px rgba(249,115,22,0.55);
+      cursor:pointer; transition: transform 0.15s;
     }
-    @keyframes spin {
-      to { transform: rotate(360deg); }
+    .place-dot:hover { transform: scale(1.25); }
+
+    /* ─── LEAFLET POPUP — ciemny styl ─── */
+    .leaflet-popup-content-wrapper {
+      background: rgba(15,23,42,0.94) !important;
+      color: #e2e8f0 !important; border-radius: 14px !important;
+      border: 1px solid rgba(255,255,255,0.10) !important;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.55) !important;
+      backdrop-filter: blur(12px) !important;
+      -webkit-backdrop-filter: blur(12px) !important;
+      min-width: 160px;
     }
+    .leaflet-popup-tip { background: rgba(15,23,42,0.94) !important; }
+    .leaflet-popup-close-button { color: #64748b !important; font-size:18px !important; top:8px !important; right:10px !important; }
+    .leaflet-popup-content { margin: 14px 16px !important; }
+    .popup-name  { font-size:15px; font-weight:700; color:#f1f5f9; margin-bottom:3px; }
+    .popup-coords{ font-size:10px; color:#475569; font-family:monospace; margin-bottom:12px; }
+    .popup-delete {
+      display:flex; align-items:center; justify-content:center; gap:6px;
+      width:100%; padding:8px; border-radius:8px; cursor:pointer;
+      background:rgba(239,68,68,0.12); border:1px solid rgba(239,68,68,0.25);
+      color:#fca5a5; font-size:13px; font-weight:600;
+      font-family:inherit; transition:background 0.2s;
+    }
+    .popup-delete:hover { background:rgba(239,68,68,0.22); }
+
+    /* ─── MODAL — dodaj miejsce ─── */
+    #modal-overlay {
+      position:fixed; inset:0; background:rgba(0,0,0,0.55);
+      z-index:2000; display:none; align-items:flex-end;
+      backdrop-filter:blur(4px); -webkit-backdrop-filter:blur(4px);
+    }
+    #modal-overlay.show { display:flex; }
+    #modal-panel {
+      width:100%; background:#1e293b;
+      border-radius:20px 20px 0 0;
+      padding:20px 20px calc(20px + env(safe-area-inset-bottom,0px));
+      border-top:1px solid rgba(255,255,255,0.10);
+      animation:slideUp 0.28s cubic-bezier(0.34,1.2,0.64,1);
+    }
+    @keyframes slideUp { from{transform:translateY(100%)} to{transform:translateY(0)} }
+    #modal-handle { width:40px; height:4px; background:#334155; border-radius:2px; margin:0 auto 16px; }
+    #modal-title  { font-size:18px; font-weight:700; color:#f1f5f9; margin-bottom:3px; }
+    #modal-coords { font-size:11px; color:#475569; font-family:monospace; margin-bottom:16px; }
+    #modal-input  {
+      width:100%;
+      background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.12);
+      border-radius:12px; padding:14px 16px;
+      font-size:16px; color:#f1f5f9; outline:none;
+      margin-bottom:16px; font-family:inherit;
+      transition:border-color 0.2s;
+    }
+    #modal-input:focus { border-color:#f97316; }
+    #modal-input::placeholder { color:#334155; }
+    #modal-btns  { display:flex; gap:10px; }
+    #modal-cancel {
+      flex:1; padding:14px;
+      background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.10);
+      border-radius:12px; color:#64748b; font-size:15px; font-weight:600;
+      cursor:pointer; font-family:inherit; transition:background 0.2s;
+    }
+    #modal-cancel:hover { background:rgba(255,255,255,0.08); }
+    #modal-save  {
+      flex:2; padding:14px;
+      background:linear-gradient(135deg,#f97316,#ea580c); border:none;
+      border-radius:12px; color:#fff; font-size:15px; font-weight:700;
+      cursor:pointer; font-family:inherit; transition:opacity 0.2s;
+    }
+    #modal-save:disabled { opacity:0.5; cursor:not-allowed; }
+
+    /* ─── TOAST ─── */
+    #toast {
+      position:fixed; bottom:130px; left:50%;
+      transform:translateX(-50%) translateY(16px);
+      background:rgba(15,23,42,0.92); color:#e2e8f0;
+      padding:10px 20px; border-radius:999px;
+      font-size:13px; font-weight:500;
+      z-index:3000; opacity:0;
+      transition:all 0.3s ease;
+      border:1px solid rgba(255,255,255,0.08);
+      pointer-events:none; white-space:nowrap;
+    }
+    #toast.show   { opacity:1; transform:translateX(-50%) translateY(0); }
+    #toast.ok     { border-color:rgba(34,197,94,0.35); color:#86efac; }
+    #toast.err    { border-color:rgba(239,68,68,0.35);  color:#fca5a5; }
+
+    /* ─── LOADER (spinning) ─── */
+    .spin { animation:spin 0.9s linear infinite; display:inline-block; }
+    @keyframes spin { to{transform:rotate(360deg)} }
 
     /* ─── LEAFLET OVERRIDES ─── */
     .leaflet-control-attribution {
-      font-size: 9px !important;
-      background: rgba(15, 23, 42, 0.72) !important;
-      color: #64748b !important;
-      border-radius: 6px 0 0 0 !important;
+      font-size:9px !important; border-radius:6px 0 0 0 !important;
+      background:rgba(15,23,42,0.72) !important; color:#475569 !important;
     }
-    .leaflet-control-attribution a { color: #94a3b8 !important; }
-
-    .leaflet-control-zoom {
-      border: none !important;
-      box-shadow: 0 4px 18px rgba(0,0,0,0.35) !important;
-    }
+    .leaflet-control-attribution a { color:#64748b !important; }
+    .leaflet-control-zoom { border:none !important; box-shadow:0 4px 18px rgba(0,0,0,0.35) !important; }
     .leaflet-control-zoom a {
-      background: rgba(15, 23, 42, 0.82) !important;
-      backdrop-filter: blur(10px);
-      -webkit-backdrop-filter: blur(10px);
-      color: #e2e8f0 !important;
-      border: 1px solid rgba(255,255,255,0.10) !important;
-      font-size: 18px !important;
-      line-height: 30px !important;
-      width: 34px !important; height: 34px !important;
+      background:rgba(15,23,42,0.85) !important;
+      backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
+      color:#e2e8f0 !important; border:1px solid rgba(255,255,255,0.10) !important;
+      font-size:18px !important; line-height:30px !important;
+      width:34px !important; height:34px !important;
     }
-    .leaflet-control-zoom a:hover {
-      background: rgba(30, 41, 59, 0.95) !important;
-    }
-    .leaflet-bar a:first-child { border-radius: 12px 12px 0 0 !important; }
-    .leaflet-bar a:last-child  { border-radius: 0 0 12px 12px !important; }
+    .leaflet-bar a:first-child { border-radius:12px 12px 0 0 !important; }
+    .leaflet-bar a:last-child  { border-radius:0 0 12px 12px !important; }
   </style>
 </head>
 
 <body>
 
-  <!-- ── Pasek statusu ── -->
+  <!-- ── Pasek statusu GPS ── -->
   <div id="status-bar">
     <span id="status-dot"></span>
     <span id="status-text">Gotowy do namierzenia</span>
   </div>
 
+  <!-- ── Wskazówka ── -->
+  <div id="hint">📍 Przytrzymaj mapę, aby dodać miejsce</div>
+
   <!-- ── Mapa ── -->
   <div id="map"></div>
 
-  <!-- ── Przyciski sterowania ── -->
+  <!-- ── Przyciski GPS ── -->
   <div id="controls">
-
     <button class="btn" id="btn-locate">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
            stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
-        <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13
-                 c0-3.87-3.13-7-7-7z"/>
+        <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/>
         <circle cx="12" cy="9" r="2.5" fill="white" stroke="none"/>
       </svg>
       Gdzie jestem?
     </button>
-
     <button class="btn" id="btn-center">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
            stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
@@ -260,231 +278,422 @@
       </svg>
       Centruj na mnie
     </button>
-
     <button class="btn" id="btn-stop">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
         <rect x="6" y="6" width="12" height="12" rx="2"/>
       </svg>
       Zatrzymaj śledzenie
     </button>
-
+    <button class="btn" id="btn-places">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+           stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+        <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/>
+        <circle cx="12" cy="9" r="2.5" fill="currentColor" stroke="none"/>
+      </svg>
+      <span id="places-label">Ładowanie…</span>
+    </button>
   </div>
 
+  <!-- ── Modal: dodaj miejsce ── -->
+  <div id="modal-overlay">
+    <div id="modal-panel">
+      <div id="modal-handle"></div>
+      <div id="modal-title">📍 Dodaj miejsce</div>
+      <div id="modal-coords"></div>
+      <input id="modal-input" type="text"
+             placeholder="Wpisz nazwę miejsca…"
+             maxlength="80" autocomplete="off" />
+      <div id="modal-btns">
+        <button id="modal-cancel">Anuluj</button>
+        <button id="modal-save">💾 Zapisz</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Toast powiadomień ── -->
+  <div id="toast"></div>
+
   <script>
-    // ╔══════════════════════════════════════════════════════════════════╗
-    // ║  KONFIGURACJA — dostosuj do swojej mapy                         ║
-    // ╚══════════════════════════════════════════════════════════════════╝
-    const CFG = {
-      // Plik obrazu mapy — umieść obok mapa.html (lub podaj pełną ścieżkę)
-      imageFile: 'mapa.jpg',
+  // ╔══════════════════════════════════════════════════════════════════╗
+  // ║  KONFIGURACJA MAPY                                               ║
+  // ╚══════════════════════════════════════════════════════════════════╝
+  const CFG = {
+    imageFile:   'mapa.jpg',
+    imageBounds: [
+      [52.2150, 21.0000],   // Południowo-Zachodni narożnik  ← ZMIEŃ
+      [52.2350, 21.0300],   // Północno-Wschodni narożnik    ← ZMIEŃ
+    ],
+    imageOpacity: 1.0,
+  };
 
-      // Geograficzne narożniki obrazu:
-      //   [[lat_PD-Zachód, lng_PD-Zachód], [lat_PN-Wschód, lng_PD-Wschód]]
-      // ► Zmień na rzeczywiste współrzędne swojego miejsca! ◄
-      imageBounds: [
-        [52.88182112013122, 21.0908532075908],   // Południowo-Zachodni narożnik // dolny lewy
-        [52.88580079438883, 21.096359724417756],   // Północno-Wschodni narożnik // górny prawy
-      ],
+  // ╔══════════════════════════════════════════════════════════════════╗
+  // ║  KONFIGURACJA AIRTABLE                                           ║
+  // ╚══════════════════════════════════════════════════════════════════╝
+  const AT = {
+    token:   'patSrMCXkJN1MaTQe.4b3c92f706dd2013df5b7bce0cf39b3efb4da1dce03356057d606d546a797ee3',
+    baseId:  'app8cFBUKVd2lQpJt',
+    tableId: 'tblX73vtwG5u14TNy',
+    get url()     { return 'https://api.airtable.com/v0/' + this.baseId + '/' + this.tableId; },
+    get metaUrl() { return 'https://api.airtable.com/v0/meta/bases/' + this.baseId + '/tables/' + this.tableId + '/fields'; },
+    get h()       { return { 'Authorization': 'Bearer ' + this.token, 'Content-Type': 'application/json' }; },
+  };
 
-      // Przezroczystość nałożonego obrazu (0.0 – 1.0)
-      imageOpacity: 1.0,
-    };
-    // ══════════════════════════════════════════════════════════════════
+  // ══════════════════════════════════════════════════════════════════
 
-    /* ── Inicjalizacja mapy ── */
-    const map = L.map('map', {
-      center: [
-        (CFG.imageBounds[0][0] + CFG.imageBounds[1][0]) / 2,
-        (CFG.imageBounds[0][1] + CFG.imageBounds[1][1]) / 2,
-      ],
-      zoom: 15,
-      zoomControl: true,
-      attributionControl: true,
+  /* ── Inicjalizacja Leaflet ── */
+  const map = L.map('map', {
+    center: [
+      (CFG.imageBounds[0][0] + CFG.imageBounds[1][0]) / 2,
+      (CFG.imageBounds[0][1] + CFG.imageBounds[1][1]) / 2,
+    ],
+    zoom: 15,
+    zoomControl: true,
+  });
+
+  // ──────────────────────────────────────────────────────────────────
+  // OPCJA A (domyślna): własny obraz jako mapa
+  const imgLayer = L.imageOverlay(CFG.imageFile, CFG.imageBounds, {
+    opacity: CFG.imageOpacity, attribution: 'Mapa własna',
+  }).addTo(map);
+  imgLayer.on('load', () => map.fitBounds(CFG.imageBounds, { padding: [24,24] }));
+  map.fitBounds(CFG.imageBounds, { padding: [24,24] });
+
+  // OPCJA B: kafelki OpenStreetMap (odkomentuj zamiast OPCJA A)
+  // L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  //   attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+  //   maxZoom: 19,
+  // }).addTo(map);
+  // ──────────────────────────────────────────────────────────────────
+
+  /* ── DOM ── */
+  const statusBar   = document.getElementById('status-bar');
+  const statusText  = document.getElementById('status-text');
+  const btnLocate   = document.getElementById('btn-locate');
+  const btnCenter   = document.getElementById('btn-center');
+  const btnStop     = document.getElementById('btn-stop');
+  const btnPlaces   = document.getElementById('btn-places');
+  const placesLabel = document.getElementById('places-label');
+  const modalOv     = document.getElementById('modal-overlay');
+  const modalInput  = document.getElementById('modal-input');
+  const modalCoords = document.getElementById('modal-coords');
+  const modalSave   = document.getElementById('modal-save');
+  const modalCancel = document.getElementById('modal-cancel');
+  const hintEl      = document.getElementById('hint');
+  const toastEl     = document.getElementById('toast');
+
+  /* ── Stan GPS ── */
+  let watchId=null, userLat=null, userLng=null, gpsMarker=null, accCircle=null;
+
+  /* ── Stan miejsc ── */
+  let pendingLat=null, pendingLng=null;
+  const placeMarkers = {};   // id → Leaflet marker
+
+  // ════════════════════════════════════════════════════════════════════
+  //  TOAST
+  // ════════════════════════════════════════════════════════════════════
+  let toastTimer = null;
+  function showToast(msg, type) {
+    toastEl.textContent = msg;
+    toastEl.className = 'show ' + (type || '');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { toastEl.className = ''; }, 3000);
+  }
+
+  // ════════════════════════════════════════════════════════════════════
+  //  AIRTABLE — inicjalizacja pól lat / lng
+  // ════════════════════════════════════════════════════════════════════
+  async function initFields() {
+    for (const name of ['lat','lng']) {
+      await fetch(AT.metaUrl, {
+        method: 'POST', headers: AT.h,
+        body: JSON.stringify({ name, type:'number', options:{ precision:8 } }),
+      }).catch(() => {});  // ignorujemy błędy (pole może już istnieć)
+    }
+  }
+
+  // ════════════════════════════════════════════════════════════════════
+  //  AIRTABLE — pobierz wszystkie miejsca
+  // ════════════════════════════════════════════════════════════════════
+  async function fetchPlaces() {
+    const res  = await fetch(AT.url + '?maxRecords=200', { headers: AT.h });
+    const data = await res.json();
+    if (!res.ok) throw new Error((data.error && data.error.message) || 'Błąd Airtable');
+    return (data.records || [])
+      .filter(function(r){ return r.fields.lat != null && r.fields.lng != null; })
+      .map(function(r){ return {
+        id:   r.id,
+        name: String(r.fields.miejsce || '(bez nazwy)'),
+        lat:  Number(r.fields.lat),
+        lng:  Number(r.fields.lng),
+      }; });
+  }
+
+  // ════════════════════════════════════════════════════════════════════
+  //  AIRTABLE — dodaj miejsce
+  // ════════════════════════════════════════════════════════════════════
+  async function createPlace(name, lat, lng) {
+    const res  = await fetch(AT.url, {
+      method: 'POST', headers: AT.h,
+      body: JSON.stringify({ records:[{ fields:{ miejsce:name, lat:lat, lng:lng } }] }),
     });
+    const data = await res.json();
+    if (!res.ok) throw new Error((data.error && data.error.message) || 'Błąd zapisu');
+    const r = data.records[0];
+    return { id:r.id, name:r.fields.miejsce||name, lat:r.fields.lat||lat, lng:r.fields.lng||lng };
+  }
 
-    // ──────────────────────────────────────────────────────────────────
-    // WARSTWA BAZOWA — wybierz jedną z opcji:
-    //
-    // ► OPCJA A (aktywna): własny obraz jako mapa główna (ImageOverlay)
-    // ► OPCJA B: kafelki OpenStreetMap — odkomentuj blok poniżej
-    // ──────────────────────────────────────────────────────────────────
+  // ════════════════════════════════════════════════════════════════════
+  //  AIRTABLE — usuń miejsce
+  // ════════════════════════════════════════════════════════════════════
+  async function destroyPlace(id) {
+    const res = await fetch(AT.url + '/' + id, { method:'DELETE', headers:AT.h });
+    if (!res.ok) throw new Error('Błąd usuwania');
+  }
 
-    // OPCJA A — ImageOverlay (własne zdjęcie)
-    const imgLayer = L.imageOverlay(CFG.imageFile, CFG.imageBounds, {
-      opacity: CFG.imageOpacity,
-      attribution: 'Mapa własna',
-      interactive: false,
-    }).addTo(map);
-
-    // Dopasuj widok do granic obrazu (po załadowaniu i jako fallback)
-    imgLayer.on('load', () => map.fitBounds(CFG.imageBounds, { padding: [24, 24] }));
-    map.fitBounds(CFG.imageBounds, { padding: [24, 24] });
-
-    // OPCJA B — OpenStreetMap (odkomentuj aby używać zamiast lub razem z OPCJĄ A)
-    // L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    //   attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-    //   maxZoom: 19,
-    // }).addTo(map);
-
-    // ──────────────────────────────────────────────────────────────────
-    // DODATKOWE NAKŁADKI (np. siatka podziału, obrysy budynków itp.)
-    // Można dodać kolejne warstwy L.imageOverlay lub L.geoJSON tutaj
-    // ──────────────────────────────────────────────────────────────────
-
-
-    /* ── Stan GPS ── */
-    let watchId   = null;
-    let userLat   = null;
-    let userLng   = null;
-    let gpsMarker = null;
-    let accCircle = null;
-
-    /* ── Elementy DOM ── */
-    const statusBar  = document.getElementById('status-bar');
-    const statusDot  = document.getElementById('status-dot');   // nie używane bezpośrednio
-    const statusText = document.getElementById('status-text');
-    const btnLocate  = document.getElementById('btn-locate');
-    const btnCenter  = document.getElementById('btn-center');
-    const btnStop    = document.getElementById('btn-stop');
-
-    /* ── Pomocnik statusu ── */
-    function setStatus(state, text) {
-      statusBar.className = state;          // 'idle' | 'locating' | 'tracking' | 'error'
-      statusText.textContent = text;
+  // ════════════════════════════════════════════════════════════════════
+  //  RENDEROWANIE MARKERA MIEJSCA
+  // ════════════════════════════════════════════════════════════════════
+  function renderPlace(place) {
+    if (placeMarkers[place.id]) {
+      map.removeLayer(placeMarkers[place.id]);
     }
-
-    /* ── Ikona niebieskiej kropki GPS ── */
-    const gpsIcon = L.divIcon({
-      className: '',
-      html: '<div class="gps-wrapper"><div class="gps-pulse"></div><div class="gps-dot"></div></div>',
-      iconSize:   [24, 24],
-      iconAnchor: [12, 12],
-      popupAnchor:[0, -14],
+    const icon = L.divIcon({
+      className: '', iconSize:[16,16], iconAnchor:[8,8], popupAnchor:[0,-12],
+      html: '<div class="place-dot"></div>',
     });
+    const marker = L.marker([place.lat, place.lng], { icon }).addTo(map);
 
-    /* ── Aktualizacja pozycji na mapie ── */
-    function updateMarker(lat, lng, accuracy) {
-      userLat = lat;
-      userLng = lng;
+    // Popup
+    const safe = place.name.replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    marker.bindPopup(
+      '<div class="popup-name">' + safe + '</div>' +
+      '<div class="popup-coords">' + place.lat.toFixed(5) + ', ' + place.lng.toFixed(5) + '</div>' +
+      '<button class="popup-delete" onclick="handleDelete(\'' + place.id + '\')">🗑 Usuń miejsce</button>',
+      { maxWidth: 220, className: '' }
+    );
 
-      const latlng = [lat, lng];
+    placeMarkers[place.id] = marker;
+  }
 
-      if (gpsMarker) {
-        // Przesuń istniejący marker i okrąg dokładności
-        gpsMarker.setLatLng(latlng);
-        accCircle.setLatLng(latlng).setRadius(accuracy);
-      } else {
-        // Pierwsza pozycja — utwórz marker + okrąg + wyśrodkuj
-        gpsMarker = L.marker(latlng, { icon: gpsIcon, zIndexOffset: 1000 }).addTo(map);
-        accCircle = L.circle(latlng, {
-          radius:      accuracy,
-          color:       '#2563eb',
-          weight:      1.5,
-          fillColor:   '#93c5fd',
-          fillOpacity: 0.15,
-        }).addTo(map);
+  function clearPlaceMarkers() {
+    Object.values(placeMarkers).forEach(function(m){ map.removeLayer(m); });
+    Object.keys(placeMarkers).forEach(function(k){ delete placeMarkers[k]; });
+  }
 
-        map.setView(latlng, 17);
-
-        // Pokaż przyciski pomocnicze
-        btnCenter.style.display = 'flex';
-        btnStop.style.display   = 'flex';
-      }
-
-      // Opis dokładności
-      const accStr = accuracy < 1000
-        ? '±' + Math.round(accuracy) + ' m'
-        : '±' + (accuracy / 1000).toFixed(1) + ' km';
-
-      setStatus(
-        'tracking',
-        lat.toFixed(5) + ', ' + lng.toFixed(5) + '   ' + accStr
-      );
+  // ════════════════════════════════════════════════════════════════════
+  //  ŁADOWANIE WSZYSTKICH MIEJSC
+  // ════════════════════════════════════════════════════════════════════
+  async function loadPlaces() {
+    placesLabel.textContent = 'Ładowanie…';
+    btnPlaces.style.display = 'flex';
+    try {
+      const places = await fetchPlaces();
+      clearPlaceMarkers();
+      places.forEach(renderPlace);
+      placesLabel.textContent = places.length + (places.length === 1 ? ' miejsce' : ' miejsc');
+    } catch(e) {
+      showToast('⚠ Błąd ładowania: ' + e.message, 'err');
+      placesLabel.textContent = 'Błąd';
     }
+  }
 
-    /* ── Obsługa błędu GPS ── */
-    const GEO_ERRORS = {
-      1: 'Brak zgody na lokalizację',
-      2: 'Pozycja niedostępna',
-      3: 'Przekroczono czas oczekiwania',
-    };
-    function onGeoError(err) {
-      setStatus('error', GEO_ERRORS[err.code] || err.message);
-      btnLocate.disabled = false;
-      resetBtnLocate();
+  // Odświeżaj co 30 s
+  btnPlaces.addEventListener('click', loadPlaces);
+  setInterval(loadPlaces, 30000);
+
+  // ════════════════════════════════════════════════════════════════════
+  //  USUWANIE MIEJSCA (wywoływane z popup)
+  // ════════════════════════════════════════════════════════════════════
+  window.handleDelete = async function(id) {
+    try {
+      await destroyPlace(id);
+      if (placeMarkers[id]) { map.removeLayer(placeMarkers[id]); delete placeMarkers[id]; }
+      map.closePopup();
+      const n = Object.keys(placeMarkers).length;
+      placesLabel.textContent = n + (n===1?' miejsce':' miejsc');
+      showToast('✓ Usunięto miejsce', 'ok');
+    } catch(e) {
+      showToast('⚠ Błąd: ' + e.message, 'err');
     }
+  };
 
-    function resetBtnLocate() {
-      btnLocate.innerHTML =
-        '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"' +
-        ' stroke="currentColor" stroke-width="2.5" stroke-linecap="round">' +
-        '<path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13' +
-        'c0-3.87-3.13-7-7-7z"/>' +
-        '<circle cx="12" cy="9" r="2.5" fill="white" stroke="none"/>' +
-        '</svg>Gdzie jestem?';
+  // ════════════════════════════════════════════════════════════════════
+  //  MODAL — pokaż / ukryj
+  // ════════════════════════════════════════════════════════════════════
+  function showAddModal(lat, lng) {
+    pendingLat = lat;
+    pendingLng = lng;
+    modalCoords.textContent = lat.toFixed(5) + ', ' + lng.toFixed(5);
+    modalInput.value = '';
+    modalSave.disabled = false;
+    modalSave.textContent = '💾 Zapisz';
+    modalOv.classList.add('show');
+    setTimeout(function(){ modalInput.focus(); }, 320);
+  }
+
+  function hideModal() {
+    modalOv.classList.remove('show');
+    pendingLat = null; pendingLng = null;
+  }
+
+  modalCancel.addEventListener('click', hideModal);
+  modalOv.addEventListener('click', function(e){ if(e.target===modalOv) hideModal(); });
+
+  // Zapis miejsca
+  modalSave.addEventListener('click', async function() {
+    const name = modalInput.value.trim();
+    if (!name) { modalInput.focus(); return; }
+    modalSave.disabled = true;
+    modalSave.innerHTML =
+      '<span class="spin"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">' +
+      '<path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg></span> Zapisuję…';
+    try {
+      const place = await createPlace(name, pendingLat, pendingLng);
+      renderPlace(place);
+      const n = Object.keys(placeMarkers).length;
+      placesLabel.textContent = n + (n===1?' miejsce':' miejsc');
+      hideModal();
+      showToast('✓ Zapisano: ' + name, 'ok');
+    } catch(e) {
+      modalSave.disabled = false;
+      modalSave.textContent = '💾 Zapisz';
+      showToast('⚠ Błąd: ' + e.message, 'err');
     }
+  });
 
-    /* ── Przycisk "Gdzie jestem?" ── */
-    btnLocate.addEventListener('click', () => {
-      if (!navigator.geolocation) {
-        setStatus('error', 'Geolokalizacja nieobsługiwana');
-        return;
+  modalInput.addEventListener('keydown', function(e){
+    if (e.key==='Enter') modalSave.click();
+    if (e.key==='Escape') hideModal();
+  });
+
+  // ════════════════════════════════════════════════════════════════════
+  //  DŁUGIE NACIŚNIĘCIE (mobile) + PRAWY KLIK (desktop)
+  // ════════════════════════════════════════════════════════════════════
+  let pressTimer = null, pressStart = null, pressMoved = false;
+
+  map.getContainer().addEventListener('touchstart', function(e) {
+    if (e.touches.length !== 1) return;
+    pressMoved = false;
+    pressStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    pressTimer = setTimeout(function() {
+      if (!pressMoved) {
+        const rect = map.getContainer().getBoundingClientRect();
+        const latlng = map.containerPointToLatLng([
+          pressStart.x - rect.left,
+          pressStart.y - rect.top,
+        ]);
+        showAddModal(latlng.lat, latlng.lng);
       }
+    }, 600);
+  }, { passive: true });
 
-      // Zatrzymaj poprzednie śledzenie
-      if (watchId !== null) {
-        navigator.geolocation.clearWatch(watchId);
-        watchId = null;
-      }
+  map.getContainer().addEventListener('touchmove', function(e) {
+    if (!pressStart) return;
+    var dx = e.touches[0].clientX - pressStart.x;
+    var dy = e.touches[0].clientY - pressStart.y;
+    if (Math.sqrt(dx*dx + dy*dy) > 8) {
+      pressMoved = true;
+      clearTimeout(pressTimer);
+    }
+  }, { passive: true });
 
-      btnLocate.disabled = true;
-      btnLocate.innerHTML =
-        '<span class="spin">' +
-        '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"' +
-        ' stroke="currentColor" stroke-width="2.5">' +
-        '<path d="M21 12a9 9 0 1 1-6.219-8.56"/>' +
-        '</svg></span> Namierzam…';
-      setStatus('locating', 'Namierzam pozycję…');
+  map.getContainer().addEventListener('touchend', function() {
+    clearTimeout(pressTimer);
+    pressStart = null;
+  }, { passive: true });
 
-      // Jednorazowy fix GPS…
-      navigator.geolocation.getCurrentPosition(
-        function(pos) {
-          updateMarker(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy);
-          btnLocate.disabled = false;
-          resetBtnLocate();
+  // Prawy klik (desktop)
+  map.on('contextmenu', function(e) {
+    showAddModal(e.latlng.lat, e.latlng.lng);
+  });
 
-          // …a potem ciągłe śledzenie (watchPosition)
-          watchId = navigator.geolocation.watchPosition(
-            function(p) {
-              updateMarker(p.coords.latitude, p.coords.longitude, p.coords.accuracy);
-            },
-            onGeoError,
-            { enableHighAccuracy: true, maximumAge: 3000, timeout: 10000 }
-          );
-        },
+  // ════════════════════════════════════════════════════════════════════
+  //  GPS — STATUS
+  // ════════════════════════════════════════════════════════════════════
+  function setStatus(state, text) {
+    statusBar.className = state;
+    statusText.textContent = text;
+  }
+
+  const GPS_ERRORS = { 1:'Brak zgody na lokalizację', 2:'Pozycja niedostępna', 3:'Przekroczono czas' };
+
+  function onGeoError(err) {
+    setStatus('error', GPS_ERRORS[err.code] || err.message);
+    btnLocate.disabled = false; resetLocateBtn();
+  }
+
+  function resetLocateBtn() {
+    btnLocate.innerHTML =
+      '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">' +
+      '<path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/>' +
+      '<circle cx="12" cy="9" r="2.5" fill="white" stroke="none"/></svg> Gdzie jestem?';
+  }
+
+  const gpsIcon = L.divIcon({
+    className:'', iconSize:[24,24], iconAnchor:[12,12],
+    html:'<div class="gps-wrapper"><div class="gps-pulse"></div><div class="gps-dot"></div></div>',
+  });
+
+  function updateMarker(lat, lng, accuracy) {
+    userLat=lat; userLng=lng;
+    if (gpsMarker) {
+      gpsMarker.setLatLng([lat,lng]);
+      accCircle.setLatLng([lat,lng]).setRadius(accuracy);
+    } else {
+      gpsMarker = L.marker([lat,lng], { icon:gpsIcon, zIndexOffset:1000 }).addTo(map);
+      accCircle  = L.circle([lat,lng], { radius:accuracy, color:'#2563eb', fillColor:'#93c5fd', fillOpacity:0.15, weight:1.5 }).addTo(map);
+      map.setView([lat,lng], 17);
+      btnCenter.style.display = 'flex';
+      btnStop.style.display   = 'flex';
+    }
+    const acc = accuracy < 1000 ? '±'+Math.round(accuracy)+' m' : '±'+(accuracy/1000).toFixed(1)+' km';
+    setStatus('tracking', lat.toFixed(5)+', '+lng.toFixed(5)+'   '+acc);
+  }
+
+  btnLocate.addEventListener('click', function() {
+    if (!navigator.geolocation) { setStatus('error','Geolokalizacja nieobsługiwana'); return; }
+    if (watchId !== null) { navigator.geolocation.clearWatch(watchId); watchId=null; }
+    btnLocate.disabled = true;
+    btnLocate.innerHTML =
+      '<span class="spin"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">' +
+      '<path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg></span> Namierzam…';
+    setStatus('locating','Namierzam pozycję…');
+
+    navigator.geolocation.getCurrentPosition(function(pos) {
+      updateMarker(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy);
+      btnLocate.disabled=false; resetLocateBtn();
+      watchId = navigator.geolocation.watchPosition(
+        function(p){ updateMarker(p.coords.latitude, p.coords.longitude, p.coords.accuracy); },
         onGeoError,
-        { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+        { enableHighAccuracy:true, maximumAge:3000, timeout:10000 }
       );
-    });
+    }, onGeoError, { enableHighAccuracy:true, timeout:15000, maximumAge:0 });
+  });
 
-    /* ── Przycisk "Centruj na mnie" ── */
-    btnCenter.addEventListener('click', () => {
-      if (userLat !== null) {
-        map.setView([userLat, userLng], map.getZoom(), { animate: true });
-      }
-    });
+  btnCenter.addEventListener('click', function() {
+    if (userLat !== null) map.setView([userLat,userLng], map.getZoom(), { animate:true });
+  });
 
-    /* ── Przycisk "Zatrzymaj śledzenie" ── */
-    btnStop.addEventListener('click', () => {
-      if (watchId !== null) {
-        navigator.geolocation.clearWatch(watchId);
-        watchId = null;
-      }
-      btnCenter.style.display = 'none';
-      btnStop.style.display   = 'none';
-      setStatus('idle', 'Śledzenie zatrzymane');
-    });
+  btnStop.addEventListener('click', function() {
+    if (watchId!==null) { navigator.geolocation.clearWatch(watchId); watchId=null; }
+    btnCenter.style.display='none'; btnStop.style.display='none';
+    setStatus('idle','Śledzenie zatrzymane');
+  });
 
+  // ════════════════════════════════════════════════════════════════════
+  //  STARTUP
+  // ════════════════════════════════════════════════════════════════════
+  (async function init() {
+    // Pokaż wskazówkę przez 4 sekundy
+    hintEl.classList.add('show');
+    setTimeout(function(){ hintEl.classList.remove('show'); }, 4000);
+
+    // Utwórz pola lat/lng w Airtable (jeśli nie istnieją)
+    await initFields();
+
+    // Załaduj miejsca z Airtable
+    await loadPlaces();
+  })();
   </script>
 </body>
 </html>
