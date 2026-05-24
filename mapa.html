@@ -842,7 +842,7 @@
     marker.bindPopup(
       '<div class="popup-name">' + safe + '</div>' +
       '<div class="popup-coords">' + place.lat.toFixed(5) + ', ' + place.lng.toFixed(5) + '</div>' +
-      '<button class="popup-nav" onclick="handleNavigate(' + place.lng.toFixed(7) + ',' + place.lat.toFixed(7) + ',' + JSON.stringify(place.id) + ')">🧭 Nawiguj tutaj</button>' +
+      '<button class="popup-nav" onclick="handleNavigate(' + place.lng.toFixed(7) + ',' + place.lat.toFixed(7) + ',\'' + place.id + '\')">🧭 Nawiguj tutaj</button>' +
       '<button class="popup-delete" onclick="handleDelete(\'' + place.id + '\')">🗑 Usuń miejsce</button>',
       { maxWidth: 220 }
     );
@@ -973,21 +973,61 @@
 
   function navigateTo(destCoord) {
     clearRoute();
-    if (userLat===null){ showToast('⚠ Uruchom GPS przed nawigacją','err'); return; }
-    var userCoord=[userLng,userLat], MAX_SNAP=300;
-    if (!roadGraph||!Object.keys(roadGraph.graph).length){ drawStraightRoute(userCoord,destCoord,'Brak sieci – linia prosta'); return; }
-    var uN=findNearestNode(userCoord), dN=findNearestNode(destCoord);
-    if (uN.dist>MAX_SNAP||dN.dist>MAX_SNAP){ drawStraightRoute(userCoord,destCoord,'Poza siecią – linia prosta'); return; }
-    var path=dijkstra(uN.key,dN.key);
-    if (!path||path.length<1){ drawStraightRoute(userCoord,destCoord,'Sieć nieciągła – linia prosta'); return; }
-    if (uN.dist>3) routeLayers.push(L.polyline([[userLat,userLng],[uN.coord[1],uN.coord[0]]],{color:'#2563eb',weight:2.5,dashArray:'7 9',opacity:0.78}).addTo(map));
-    if (path.length>=2) routeLayers.push(L.polyline(path.map(function(c){return[c[1],c[0]];}),{color:'#2563eb',weight:5,opacity:0.92}).addTo(map));
-    if (dN.dist>3) routeLayers.push(L.polyline([[dN.coord[1],dN.coord[0]],[destCoord[1],destCoord[0]]],{color:'#2563eb',weight:2.5,dashArray:'7 9',opacity:0.78}).addTo(map));
-    var allPts=[[userLat,userLng]].concat(path.map(function(c){return[c[1],c[0]];}),[[destCoord[1],destCoord[0]]]);
-    map.fitBounds(allPts,{padding:[40,40]});
-    var roadDist=path.length>=2?turf.length(turf.lineString(path),{units:'meters'}):0;
-    showToast('🧭 Trasa: ~'+Math.round(uN.dist+roadDist+dN.dist)+' m','ok');
-    btnClearRoute.style.display='flex';
+    var userCoord;
+    if (userLat !== null) {
+      userCoord = [userLng, userLat];
+    } else {
+      // fallback: centrum aktualnego widoku mapy
+      var c = map.getCenter();
+      userCoord = [c.lng, c.lat];
+      showToast('ℹ GPS wyłączony — trasa od centrum widoku', '');
+    }
+    console.log('[NAV] start:', userCoord, '→ dest:', destCoord);
+    console.log('[NAV] roadGraph:', roadGraph ? Object.keys(roadGraph.graph).length + ' węzłów' : 'BRAK');
+    var MAX_SNAP=300;
+    if (!roadGraph || !Object.keys(roadGraph.graph).length) {
+      console.warn('[NAV] Brak sieci dróg – linia prosta');
+      drawStraightRoute(userCoord, destCoord, 'Brak sieci – linia prosta'); return;
+    }
+    var uN = findNearestNode(userCoord);
+    var dN = findNearestNode(destCoord);
+    console.log('[NAV] nearest user node:', uN.key, 'dist:', Math.round(uN.dist)+'m');
+    console.log('[NAV] nearest dest node:', dN.key, 'dist:', Math.round(dN.dist)+'m');
+    if (uN.dist > MAX_SNAP || dN.dist > MAX_SNAP) {
+      console.warn('[NAV] Poza siecią – linia prosta (user:'+Math.round(uN.dist)+'m, dest:'+Math.round(dN.dist)+'m)');
+      drawStraightRoute(userCoord, destCoord, 'Poza siecią – linia prosta'); return;
+    }
+    var path = dijkstra(uN.key, dN.key);
+    console.log('[NAV] dijkstra path:', path ? path.length + ' punktów' : 'null');
+    if (!path || path.length < 1) {
+      console.warn('[NAV] Sieć nieciągła – linia prosta');
+      drawStraightRoute(userCoord, destCoord, 'Sieć nieciągła – linia prosta'); return;
+    }
+    // Odcinek dojścia: użytkownik → wejście na sieć
+    var startLL = [userCoord[1], userCoord[0]];   // [lat,lng] dla Leaflet
+    var uNLL    = [uN.coord[1], uN.coord[0]];
+    var dNLL    = [dN.coord[1], dN.coord[0]];
+    var destLL  = [destCoord[1], destCoord[0]];
+    if (uN.dist > 3)
+      routeLayers.push(L.polyline([startLL, uNLL], {color:'#2563eb', weight:2.5, dashArray:'7 9', opacity:0.80}).addTo(map));
+    // Trasa po sieci dróg
+    if (path.length >= 2) {
+      var roadLatLngs = path.map(function(c){ return [c[1], c[0]]; });
+      routeLayers.push(L.polyline(roadLatLngs, {color:'#2563eb', weight:5, opacity:0.92}).addTo(map));
+    }
+    // Odcinek dojścia: wyjście z sieci → cel
+    if (dN.dist > 3)
+      routeLayers.push(L.polyline([dNLL, destLL], {color:'#2563eb', weight:2.5, dashArray:'7 9', opacity:0.80}).addTo(map));
+    // Dopasuj widok
+    var allPts = [startLL].concat(
+      path.map(function(c){ return [c[1], c[0]]; }),
+      [destLL]
+    );
+    map.fitBounds(allPts, {padding:[60, 60]});
+    var roadDist = path.length >= 2 ? turf.length(turf.lineString(path), {units:'meters'}) : 0;
+    var totalDist = Math.round(uN.dist + roadDist + dN.dist);
+    showToast('🧭 Trasa: ~' + totalDist + ' m', 'ok');
+    btnClearRoute.style.display = 'flex';
   }
 
   window.handleNavigate = function(lng, lat, placeId) {
@@ -999,9 +1039,16 @@
 
   async function loadRoadNetwork() {
     try {
-      var res=await fetch('./drogi.json'), geojson=await res.json();
-      roadGraph=buildRoadGraph(geojson);
-    } catch(e) { console.warn('Sieć dróg:', e.message); }
+      var res = await fetch('./drogi.json');
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      var geojson = await res.json();
+      roadGraph = buildRoadGraph(geojson);
+      var nodeCount = Object.keys(roadGraph.graph).length;
+      console.log('[ROAD] Sieć załadowana:', nodeCount, 'węzłów w grafie');
+    } catch(e) {
+      console.error('[ROAD] Błąd ładowania sieci dróg:', e.message);
+      showToast('⚠ Brak mapy dróg: ' + e.message, 'err');
+    }
   }
 
   // ════════════════════════════════════════════════════════════════════
