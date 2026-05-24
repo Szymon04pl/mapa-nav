@@ -455,6 +455,11 @@
       [52.88580079438883, 21.096359724417756],  // Północno-Wschodni narożnik (górny prawy)
     ],
     imageOpacity: 1.0,
+
+    // ── Punkt startowy nawigacji gdy GPS jest wyłączony ──────────────
+    // Zmień te wartości, aby ustawić inny domyślny punkt startowy.
+    // Format: [szerokość_geograficzna, długość_geograficzna]
+    defaultStart: [52.88550, 21.09555],
   };
 
   // ╔══════════════════════════════════════════════════════════════════╗
@@ -1038,10 +1043,9 @@
     if (userLat !== null) {
       userCoord = [userLng, userLat];
     } else {
-      // fallback: centrum aktualnego widoku mapy
-      var c = map.getCenter();
-      userCoord = [c.lng, c.lat];
-      showToast('ℹ GPS wyłączony — trasa od centrum widoku', '');
+      // fallback: domyślny punkt startowy z CFG.defaultStart
+      userCoord = [CFG.defaultStart[1], CFG.defaultStart[0]]; // [lng, lat] dla GeoJSON/Turf
+      showToast('ℹ GPS wyłączony — start z punktu domyślnego', '');
     }
     console.log('[NAV] start:', userCoord, '→ dest:', destCoord);
     console.log('[NAV] roadGraph:', roadGraph ? Object.keys(roadGraph.graph).length + ' węzłów' : 'BRAK');
