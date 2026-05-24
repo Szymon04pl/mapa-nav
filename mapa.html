@@ -71,9 +71,20 @@
     .search-result:last-child { border-bottom: none; }
     .search-result:active { background: rgba(0,0,0,0.05); }
     .sr-icon { color: #f97316; flex-shrink: 0; }
+    .sr-icon.recent { color: #8b5cf6; }
     .sr-name  { font-size: 14px; font-weight: 600; color: #0f172a; }
     .sr-coord { font-size: 10px; color: #94a3b8; font-family: monospace; margin-top: 1px; }
     .search-empty { padding: 16px; text-align: center; color: #94a3b8; font-size: 13px; }
+
+    /* Nagłówek sekcji w panelu */
+    .search-section-header {
+      padding: 8px 16px 4px;
+      font-size: 10px; font-weight: 700; letter-spacing: 0.08em;
+      color: #94a3b8; text-transform: uppercase;
+      border-bottom: 1px solid rgba(0,0,0,0.05);
+      background: rgba(248,250,252,0.9);
+    }
+
     /* Przycisk "Dodaj miejsce" wewnątrz panelu */
     #btn-panel-add {
       display: flex; align-items: center; justify-content: center; gap: 8px;
@@ -86,10 +97,36 @@
     }
     #btn-panel-add:active { opacity: 0.85; }
 
+    /* ─── ZOOM (pod wyszukiwarką, prawa strona) ─── */
+    #zoom-controls {
+      position: fixed;
+      top: calc(max(env(safe-area-inset-top, 0px), 12px) + 62px);
+      right: 12px;
+      z-index: 999;
+      display: flex; flex-direction: column;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 4px 18px rgba(0,0,0,0.35);
+    }
+    .zoom-btn {
+      width: 36px; height: 36px;
+      background: rgba(15,23,42,0.85);
+      backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+      border: 1px solid rgba(255,255,255,0.10);
+      color: #e2e8f0; font-size: 20px; font-weight: 300;
+      cursor: pointer; line-height: 1;
+      display: flex; align-items: center; justify-content: center;
+      transition: background 0.15s;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none; -webkit-user-select: none;
+    }
+    .zoom-btn:first-child { border-bottom: 1px solid rgba(255,255,255,0.08); }
+    .zoom-btn:active { background: rgba(37,99,235,0.40); }
+
     /* ─── GPS PILL (pod wyszukiwarką) ─── */
     #gps-pill {
       position: fixed;
-      top: calc(max(env(safe-area-inset-top, 0px), 12px) + 52px);
+      top: calc(max(env(safe-area-inset-top, 0px), 12px) + 62px);
       left: 12px;
       z-index: 999;
       display: none; align-items: center; gap: 6px;
@@ -111,7 +148,7 @@
     /* ─── WSKAZÓWKA ─── */
     #hint {
       position: fixed;
-      top: calc(max(env(safe-area-inset-top, 0px), 12px) + 56px);
+      top: calc(max(env(safe-area-inset-top, 0px), 12px) + 62px);
       left: 50%; transform: translateX(-50%);
       z-index: 998;
       background: rgba(15,23,42,0.78); color: #94a3b8;
@@ -282,21 +319,13 @@
     .spin { animation:spin 0.9s linear infinite; display:inline-block; }
     @keyframes spin { to{transform:rotate(360deg)} }
 
-    /* ─── LEAFLET OVERRIDES ─── */
+    /* ─── LEAFLET OVERRIDES (ukryj domyślny zoom) ─── */
     .leaflet-control-attribution {
       font-size:9px !important; border-radius:6px 0 0 0 !important;
       background:rgba(15,23,42,0.72) !important; color:#475569 !important;
     }
     .leaflet-control-attribution a { color:#64748b !important; }
-    .leaflet-control-zoom { border:none !important; box-shadow:0 4px 18px rgba(0,0,0,0.35) !important; }
-    .leaflet-control-zoom a {
-      background:rgba(15,23,42,0.85) !important; backdrop-filter:blur(10px);
-      color:#e2e8f0 !important; border:1px solid rgba(255,255,255,0.10) !important;
-      font-size:18px !important; line-height:30px !important;
-      width:34px !important; height:34px !important;
-    }
-    .leaflet-bar a:first-child { border-radius:12px 12px 0 0 !important; }
-    .leaflet-bar a:last-child  { border-radius:0 0 12px 12px !important; }
+    .leaflet-control-zoom { display: none !important; }
   </style>
 </head>
 <body>
@@ -327,6 +356,12 @@
         Dodaj nowe miejsce
       </button>
     </div>
+  </div>
+
+  <!-- ── Przyciski zoom (pod wyszukiwarką, prawa strona) ── -->
+  <div id="zoom-controls">
+    <button class="zoom-btn" id="btn-zoom-in" aria-label="Przybliż">+</button>
+    <button class="zoom-btn" id="btn-zoom-out" aria-label="Oddal">−</button>
   </div>
 
   <!-- ── GPS pill ── -->
@@ -413,14 +448,14 @@
 
   // ══════════════════════════════════════════════════════════════════
 
-  /* ── Inicjalizacja Leaflet ── */
+  /* ── Inicjalizacja Leaflet (bez domyślnego zoom control) ── */
   const map = L.map('map', {
     center: [
       (CFG.imageBounds[0][0] + CFG.imageBounds[1][0]) / 2,
       (CFG.imageBounds[0][1] + CFG.imageBounds[1][1]) / 2,
     ],
     zoom: 17,
-    zoomControl: true,
+    zoomControl: false,   // wyłączone — używamy własnych przycisków
   });
 
   const imgLayer = L.imageOverlay(CFG.imageFile, CFG.imageBounds, {
@@ -428,12 +463,6 @@
   }).addTo(map);
   imgLayer.on('load', function() { map.fitBounds(CFG.imageBounds, { padding:[24,24] }); });
   map.fitBounds(CFG.imageBounds, { padding:[24,24] });
-
-  // OPCJA B: kafelki OpenStreetMap
-  // L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-  //   attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-  //   maxZoom: 19,
-  // }).addTo(map);
 
   /* ── DOM ── */
   const btnLocate     = document.getElementById('btn-locate');
@@ -453,6 +482,8 @@
   const searchPanel   = document.getElementById('search-panel');
   const searchClear   = document.getElementById('search-clear');
   const btnPanelAdd   = document.getElementById('btn-panel-add');
+  const btnZoomIn     = document.getElementById('btn-zoom-in');
+  const btnZoomOut    = document.getElementById('btn-zoom-out');
 
   /* ── Stan ── */
   let watchId    = null, isTracking = false;
@@ -464,6 +495,12 @@
   const placeMarkers = {};    // id → Leaflet marker
 
   // ════════════════════════════════════════════════════════════════════
+  //  ZOOM — własne przyciski
+  // ════════════════════════════════════════════════════════════════════
+  btnZoomIn.addEventListener('click', function() { map.zoomIn(); });
+  btnZoomOut.addEventListener('click', function() { map.zoomOut(); });
+
+  // ════════════════════════════════════════════════════════════════════
   //  TOAST
   // ════════════════════════════════════════════════════════════════════
   let toastTimer = null;
@@ -472,6 +509,31 @@
     toastEl.className = 'show ' + (type || '');
     clearTimeout(toastTimer);
     toastTimer = setTimeout(function() { toastEl.className = ''; }, 3000);
+  }
+
+  // ════════════════════════════════════════════════════════════════════
+  //  OSTATNIO ODWIEDZONE MIEJSCA (localStorage, max 4)
+  // ════════════════════════════════════════════════════════════════════
+  var RECENT_KEY = 'map_recent_places_v1';
+
+  function getRecentIds() {
+    try { return JSON.parse(localStorage.getItem(RECENT_KEY)) || []; }
+    catch(e) { return []; }
+  }
+
+  function addRecentId(id) {
+    var ids = getRecentIds().filter(function(i) { return i !== id; });
+    ids.unshift(id);
+    if (ids.length > 4) ids = ids.slice(0, 4);
+    try { localStorage.setItem(RECENT_KEY, JSON.stringify(ids)); } catch(e) {}
+  }
+
+  function getRecentPlaces() {
+    var ids = getRecentIds();
+    return ids
+      .map(function(id) { return allPlaces.find(function(p) { return p.id === id; }); })
+      .filter(Boolean)
+      .slice(0, 4);
   }
 
   // ════════════════════════════════════════════════════════════════════
@@ -488,39 +550,70 @@
     searchInput.blur();
   }
 
+  function makeResultEl(place, isRecent) {
+    var el = document.createElement('div');
+    el.className = 'search-result';
+
+    var iconSvg = isRecent
+      ? '<svg class="sr-icon recent" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>'
+      : '<svg class="sr-icon" width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/></svg>';
+
+    el.innerHTML =
+      iconSvg +
+      '<div><div class="sr-name">' + place.name.replace(/</g,'&lt;') + '</div>' +
+      '<div class="sr-coord">' + place.lat.toFixed(5) + ', ' + place.lng.toFixed(5) + '</div></div>';
+
+    el.addEventListener('click', function() {
+      addRecentId(place.id);   // zapamiętaj odwiedziny
+      closeSearchPanel();
+      map.setView([place.lat, place.lng], 19, { animate: true });
+      if (placeMarkers[place.id]) {
+        setTimeout(function() { placeMarkers[place.id].openPopup(); }, 400);
+      }
+    });
+    return el;
+  }
+
   function renderSearchResults(query) {
-    // Usuń stare wyniki (zachowaj btn-panel-add)
-    Array.from(searchPanel.querySelectorAll('.search-result, .search-empty'))
+    // Usuń stare wyniki (zachowaj btn-panel-add i nagłówki)
+    Array.from(searchPanel.querySelectorAll('.search-result, .search-empty, .search-section-header'))
       .forEach(function(el) { el.remove(); });
 
     var q = query.trim().toLowerCase();
-    var filtered = q
-      ? allPlaces.filter(function(p) { return p.name.toLowerCase().includes(q); })
-      : allPlaces;
 
-    if (filtered.length === 0 && q) {
-      var empty = document.createElement('div');
-      empty.className = 'search-empty';
-      empty.textContent = 'Brak wyników dla „' + query + '"';
-      searchPanel.insertBefore(empty, btnPanelAdd);
-    } else {
-      filtered.forEach(function(place) {
-        var el = document.createElement('div');
-        el.className = 'search-result';
-        el.innerHTML =
-          '<svg class="sr-icon" width="14" height="14" viewBox="0 0 24 24" fill="currentColor">' +
-          '<path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/></svg>' +
-          '<div><div class="sr-name">' + place.name.replace(/</g,'&lt;') + '</div>' +
-          '<div class="sr-coord">' + place.lat.toFixed(5) + ', ' + place.lng.toFixed(5) + '</div></div>';
-        el.addEventListener('click', function() {
-          closeSearchPanel();
-          map.setView([place.lat, place.lng], 19, { animate: true });
-          if (placeMarkers[place.id]) {
-            setTimeout(function() { placeMarkers[place.id].openPopup(); }, 400);
-          }
+    if (!q) {
+      // ── Tryb "ostatnio odwiedzone" ──
+      var recent = getRecentPlaces();
+      if (recent.length > 0) {
+        var hdr = document.createElement('div');
+        hdr.className = 'search-section-header';
+        hdr.textContent = '🕐 Ostatnio odwiedzone';
+        searchPanel.insertBefore(hdr, btnPanelAdd);
+        recent.forEach(function(place) {
+          searchPanel.insertBefore(makeResultEl(place, true), btnPanelAdd);
         });
-        searchPanel.insertBefore(el, btnPanelAdd);
+      } else {
+        var empty = document.createElement('div');
+        empty.className = 'search-empty';
+        empty.textContent = 'Brak ostatnio odwiedzanych miejsc';
+        searchPanel.insertBefore(empty, btnPanelAdd);
+      }
+    } else {
+      // ── Tryb wyszukiwania ──
+      var filtered = allPlaces.filter(function(p) {
+        return p.name.toLowerCase().includes(q);
       });
+
+      if (filtered.length === 0) {
+        var empty2 = document.createElement('div');
+        empty2.className = 'search-empty';
+        empty2.textContent = 'Brak wyników dla „' + query + '"';
+        searchPanel.insertBefore(empty2, btnPanelAdd);
+      } else {
+        filtered.forEach(function(place) {
+          searchPanel.insertBefore(makeResultEl(place, false), btnPanelAdd);
+        });
+      }
     }
   }
 
@@ -749,7 +842,7 @@
     marker.bindPopup(
       '<div class="popup-name">' + safe + '</div>' +
       '<div class="popup-coords">' + place.lat.toFixed(5) + ', ' + place.lng.toFixed(5) + '</div>' +
-      '<button class="popup-nav" onclick="handleNavigate(' + place.lng.toFixed(7) + ',' + place.lat.toFixed(7) + ')">🧭 Nawiguj tutaj</button>' +
+      '<button class="popup-nav" onclick="handleNavigate(' + place.lng.toFixed(7) + ',' + place.lat.toFixed(7) + ',' + JSON.stringify(place.id) + ')">🧭 Nawiguj tutaj</button>' +
       '<button class="popup-delete" onclick="handleDelete(\'' + place.id + '\')">🗑 Usuń miejsce</button>',
       { maxWidth: 220 }
     );
@@ -897,7 +990,11 @@
     btnClearRoute.style.display='flex';
   }
 
-  window.handleNavigate = function(lng, lat) { map.closePopup(); navigateTo([lng,lat]); };
+  window.handleNavigate = function(lng, lat, placeId) {
+    map.closePopup();
+    if (placeId) addRecentId(placeId);   // zapamiętaj nawigację z popupu
+    navigateTo([lng, lat]);
+  };
   btnClearRoute.addEventListener('click', clearRoute);
 
   async function loadRoadNetwork() {
@@ -914,7 +1011,6 @@
     await loadRoadNetwork();
     await initFields();
     await loadPlaces();
-    // Odśwież wyszukiwarkę po załadowaniu
     if (searchPanel.classList.contains('show')) renderSearchResults(searchInput.value);
   })();
   </script>
