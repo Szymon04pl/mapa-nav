@@ -6,28 +6,16 @@
         maximum-scale=1.0, user-scalable=no" />
   <title>Mapa</title>
 
-  <!-- ╔══════════════════════════════════════════════════════════════════╗
-       ║  LEAFLET — CDN (wymień na pliki lokalne dla trybu OFFLINE):      ║
-       ║  1. Pobierz leaflet.css → href="./leaflet.css"                   ║
-       ║  2. Pobierz leaflet.js  → src="./leaflet.js"                     ║
-       ║  Pobierz z:  https://leafletjs.com/download.html                 ║
-       ╚══════════════════════════════════════════════════════════════════╝ -->
-  <link rel="stylesheet"
-        href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <!-- LEAFLET CDN — zastąp lokalnymi plikami dla trybu offline -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-
-  <!-- ╔══════════════════════════════════════════════════════════════════╗
-       ║  TURF.JS — obliczenia geometryczne (CDN)                         ║
-       ║  Lokalnie: pobierz turf.min.js → src="./turf.min.js"            ║
-       ╚══════════════════════════════════════════════════════════════════╝ -->
+  <!-- TURF.JS CDN — obliczenia geometryczne -->
   <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
 
   <style>
-    /* ─── RESET ─── */
     *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
     html, body {
-      width: 100%; height: 100%;
-      overflow: hidden;
+      width: 100%; height: 100%; overflow: hidden;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
                    'Helvetica Neue', Arial, sans-serif;
       background: #0f172a;
@@ -36,37 +24,96 @@
     /* ─── MAPA ─── */
     #map { position: fixed; inset: 0; z-index: 1; background: #1e293b; }
 
-    /* ─── PASEK STATUSU GPS ─── */
-    #status-bar {
+    /* ─── WYSZUKIWARKA (góra) ─── */
+    #search-wrap {
       position: fixed;
-      top: max(env(safe-area-inset-top, 0px), 16px);
-      left: 50%; transform: translateX(-50%);
+      top: max(env(safe-area-inset-top, 0px), 12px);
+      left: 12px; right: 12px;
       z-index: 1000;
-      display: flex; align-items: center; gap: 8px;
+    }
+    #search-bar {
+      display: flex; align-items: center; gap: 10px;
+      background: rgba(255,255,255,0.97);
+      border-radius: 16px;
+      padding: 10px 14px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.28);
+      transition: border-radius 0.2s;
+    }
+    #search-bar.open { border-radius: 16px 16px 0 0; }
+    .search-icon { color: #64748b; flex-shrink: 0; }
+    #search-input {
+      flex: 1; background: transparent; border: none; outline: none;
+      font-size: 15px; color: #0f172a; font-family: inherit; min-width: 0;
+    }
+    #search-input::placeholder { color: #94a3b8; }
+    #search-clear {
+      background: none; border: none; cursor: pointer;
+      color: #94a3b8; padding: 2px; display: none; line-height: 1;
+    }
+    #search-clear.show { display: block; }
+
+    /* ─── PANEL WYNIKÓW ─── */
+    #search-panel {
+      background: rgba(255,255,255,0.97);
+      border-radius: 0 0 16px 16px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.18);
+      display: none; overflow: hidden;
+      max-height: 55vh; overflow-y: auto;
+      border-top: 1px solid rgba(0,0,0,0.06);
+    }
+    #search-panel.show { display: block; }
+    .search-result {
+      display: flex; align-items: center; gap: 10px;
+      padding: 11px 16px; cursor: pointer;
+      border-bottom: 1px solid rgba(0,0,0,0.05);
+      transition: background 0.12s;
+    }
+    .search-result:last-child { border-bottom: none; }
+    .search-result:active { background: rgba(0,0,0,0.05); }
+    .sr-icon { color: #f97316; flex-shrink: 0; }
+    .sr-name  { font-size: 14px; font-weight: 600; color: #0f172a; }
+    .sr-coord { font-size: 10px; color: #94a3b8; font-family: monospace; margin-top: 1px; }
+    .search-empty { padding: 16px; text-align: center; color: #94a3b8; font-size: 13px; }
+    /* Przycisk "Dodaj miejsce" wewnątrz panelu */
+    #btn-panel-add {
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      width: calc(100% - 24px); margin: 10px 12px 12px;
+      padding: 13px; border: none; border-radius: 12px;
+      background: linear-gradient(135deg,#f97316,#ea580c);
+      color: #fff; font-size: 14px; font-weight: 700;
+      cursor: pointer; font-family: inherit;
+      transition: opacity 0.15s; flex-shrink: 0;
+    }
+    #btn-panel-add:active { opacity: 0.85; }
+
+    /* ─── GPS PILL (pod wyszukiwarką) ─── */
+    #gps-pill {
+      position: fixed;
+      top: calc(max(env(safe-area-inset-top, 0px), 12px) + 52px);
+      left: 12px;
+      z-index: 999;
+      display: none; align-items: center; gap: 6px;
       background: rgba(15,23,42,0.82);
-      backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
-      border: 1px solid rgba(255,255,255,0.10);
-      border-radius: 999px;
-      padding: 9px 18px 9px 14px;
-      color: #e2e8f0; font-size: 12px; font-weight: 500;
-      letter-spacing: 0.015em; white-space: nowrap;
-      max-width: 92vw; overflow: hidden; text-overflow: ellipsis;
-      box-shadow: 0 4px 24px rgba(0,0,0,0.40);
+      backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+      border: 1px solid rgba(37,99,235,0.30);
+      border-radius: 999px; padding: 5px 12px 5px 8px;
+      color: #93c5fd; font-size: 11px; font-family: monospace;
+      pointer-events: none;
     }
-    #status-dot {
-      flex-shrink: 0; width: 8px; height: 8px;
-      border-radius: 50%; background: #475569;
-      transition: background 0.3s;
+    #gps-pill.show { display: flex; }
+    .gps-pill-dot {
+      width: 7px; height: 7px; background: #3b82f6;
+      border-radius: 50%; flex-shrink: 0;
+      animation: blink 1.6s ease-in-out infinite;
     }
-    #status-bar.tracking  #status-dot { background: #3b82f6; animation: blink 1.6s ease-in-out infinite; }
-    #status-bar.error     #status-dot { background: #ef4444; }
-    #status-bar.locating  #status-dot { background: #f59e0b; animation: blink 0.7s ease-in-out infinite; }
     @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.2} }
 
-    /* ─── WSKAZÓWKA "PRZYTRZYMAJ" ─── */
+    /* ─── WSKAZÓWKA ─── */
     #hint {
-      position: fixed; top: 68px; left: 50%; transform: translateX(-50%);
-      z-index: 1000;
+      position: fixed;
+      top: calc(max(env(safe-area-inset-top, 0px), 12px) + 56px);
+      left: 50%; transform: translateX(-50%);
+      z-index: 998;
       background: rgba(15,23,42,0.78); color: #94a3b8;
       font-size: 11px; padding: 6px 14px; border-radius: 999px;
       border: 1px solid rgba(255,255,255,0.08);
@@ -80,7 +127,7 @@
       background: rgba(120,53,15,0.82);
     }
 
-    /* ─── PRZYCISKI ─── */
+    /* ─── PRZYCISKI (dół) ─── */
     #controls {
       position: fixed;
       bottom: max(env(safe-area-inset-bottom, 0px), 28px);
@@ -96,36 +143,25 @@
       -webkit-tap-highlight-color: transparent;
       user-select: none; -webkit-user-select: none;
     }
-    .btn:active { transform: scale(0.94); }
+    .btn:active  { transform: scale(0.94); }
     .btn:disabled { opacity: 0.55; cursor: not-allowed; transform: none; }
+
     #btn-locate {
       padding: 15px 30px; font-size: 16px; color: #fff;
       background: linear-gradient(135deg,#2563eb,#1d4ed8);
       box-shadow: 0 6px 28px rgba(37,99,235,0.50);
+      transition: transform 0.12s, background 0.25s, box-shadow 0.25s;
+    }
+    #btn-locate.tracking {
+      background: linear-gradient(135deg,#dc2626,#b91c1c);
+      box-shadow: 0 6px 28px rgba(220,38,38,0.45);
     }
     #btn-center {
       padding: 11px 22px; font-size: 13px; color: #e2e8f0;
-      background: rgba(15,23,42,0.78);
+      background: rgba(15,23,42,0.80);
       backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
       border: 1px solid rgba(255,255,255,0.12);
       box-shadow: 0 4px 18px rgba(0,0,0,0.35); display: none;
-    }
-    #btn-stop {
-      padding: 11px 22px; font-size: 13px; color: #fecaca;
-      background: rgba(127,29,29,0.80);
-      backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
-      border: 1px solid rgba(239,68,68,0.30);
-      box-shadow: 0 4px 18px rgba(0,0,0,0.30); display: none;
-    }
-    #btn-places {
-      padding: 11px 20px; font-size: 13px; color: #fff;
-      background: linear-gradient(135deg,#f97316,#ea580c);
-      box-shadow: 0 4px 18px rgba(249,115,22,0.35); display: none;
-    }
-    #btn-add {
-      padding: 13px 26px; font-size: 15px; color: #fff;
-      background: linear-gradient(135deg,#f97316,#ea580c);
-      box-shadow: 0 6px 22px rgba(249,115,22,0.40);
     }
     #btn-clear-route {
       padding: 11px 22px; font-size: 13px; color: #93c5fd;
@@ -134,17 +170,8 @@
       border: 1px solid rgba(37,99,235,0.30);
       box-shadow: 0 4px 18px rgba(0,0,0,0.35); display: none;
     }
-    #btn-add.active {
-      background: linear-gradient(135deg,#ea580c,#c2410c);
-      box-shadow: 0 0 0 3px rgba(249,115,22,0.45), 0 6px 22px rgba(249,115,22,0.35);
-      animation: addPulse 1.4s ease-in-out infinite;
-    }
-    @keyframes addPulse {
-      0%,100% { box-shadow: 0 0 0 3px rgba(249,115,22,0.45), 0 6px 22px rgba(249,115,22,0.35); }
-      50%      { box-shadow: 0 0 0 6px rgba(249,115,22,0.15), 0 6px 22px rgba(249,115,22,0.35); }
-    }
 
-    /* ─── NIEBIESKA KROPKA GPS ─── */
+    /* ─── GPS MARKER ─── */
     .gps-wrapper { position:relative; width:24px; height:24px; }
     .gps-dot {
       position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
@@ -163,37 +190,27 @@
       100%{ transform:translate(-50%,-50%) scale(3.0); opacity:0;   }
     }
 
-    /* ─── MARKER MIEJSCA (pomarańczowa kropka) ─── */
+    /* ─── MARKER MIEJSCA ─── */
     .place-dot {
       width:16px; height:16px; background:#f97316; border:3px solid #fff;
       border-radius:50%; box-shadow:0 2px 10px rgba(249,115,22,0.55);
-      cursor:pointer; transition: transform 0.15s;
+      cursor:pointer; transition:transform 0.15s;
     }
-    .place-dot:hover { transform: scale(1.25); }
+    .place-dot:hover { transform:scale(1.25); }
 
-    /* ─── LEAFLET POPUP — ciemny styl ─── */
+    /* ─── LEAFLET POPUP ─── */
     .leaflet-popup-content-wrapper {
-      background: rgba(15,23,42,0.94) !important;
-      color: #e2e8f0 !important; border-radius: 14px !important;
-      border: 1px solid rgba(255,255,255,0.10) !important;
-      box-shadow: 0 8px 32px rgba(0,0,0,0.55) !important;
-      backdrop-filter: blur(12px) !important;
-      -webkit-backdrop-filter: blur(12px) !important;
-      min-width: 160px;
+      background:rgba(15,23,42,0.94) !important; color:#e2e8f0 !important;
+      border-radius:14px !important; border:1px solid rgba(255,255,255,0.10) !important;
+      box-shadow:0 8px 32px rgba(0,0,0,0.55) !important;
+      backdrop-filter:blur(12px) !important; -webkit-backdrop-filter:blur(12px) !important;
+      min-width:160px;
     }
-    .leaflet-popup-tip { background: rgba(15,23,42,0.94) !important; }
-    .leaflet-popup-close-button { color: #64748b !important; font-size:18px !important; top:8px !important; right:10px !important; }
-    .leaflet-popup-content { margin: 14px 16px !important; }
+    .leaflet-popup-tip { background:rgba(15,23,42,0.94) !important; }
+    .leaflet-popup-close-button { color:#64748b !important; font-size:18px !important; top:8px !important; right:10px !important; }
+    .leaflet-popup-content { margin:14px 16px !important; }
     .popup-name  { font-size:15px; font-weight:700; color:#f1f5f9; margin-bottom:3px; }
     .popup-coords{ font-size:10px; color:#475569; font-family:monospace; margin-bottom:12px; }
-    .popup-delete {
-      display:flex; align-items:center; justify-content:center; gap:6px;
-      width:100%; padding:8px; border-radius:8px; cursor:pointer;
-      background:rgba(239,68,68,0.12); border:1px solid rgba(239,68,68,0.25);
-      color:#fca5a5; font-size:13px; font-weight:600;
-      font-family:inherit; transition:background 0.2s;
-    }
-    .popup-delete:hover { background:rgba(239,68,68,0.22); }
     .popup-nav {
       display:flex; align-items:center; justify-content:center; gap:6px;
       width:100%; padding:8px; border-radius:8px; cursor:pointer;
@@ -202,8 +219,16 @@
       font-family:inherit; transition:background 0.2s; margin-bottom:8px;
     }
     .popup-nav:hover { background:rgba(37,99,235,0.24); }
+    .popup-delete {
+      display:flex; align-items:center; justify-content:center; gap:6px;
+      width:100%; padding:8px; border-radius:8px; cursor:pointer;
+      background:rgba(239,68,68,0.12); border:1px solid rgba(239,68,68,0.25);
+      color:#fca5a5; font-size:13px; font-weight:600;
+      font-family:inherit; transition:background 0.2s;
+    }
+    .popup-delete:hover { background:rgba(239,68,68,0.22); }
 
-    /* ─── MODAL — dodaj miejsce ─── */
+    /* ─── MODAL dodaj miejsce ─── */
     #modal-overlay {
       position:fixed; inset:0; background:rgba(0,0,0,0.55);
       z-index:2000; display:none; align-items:flex-end;
@@ -211,8 +236,7 @@
     }
     #modal-overlay.show { display:flex; }
     #modal-panel {
-      width:100%; background:#1e293b;
-      border-radius:20px 20px 0 0;
+      width:100%; background:#1e293b; border-radius:20px 20px 0 0;
       padding:20px 20px calc(20px + env(safe-area-inset-bottom,0px));
       border-top:1px solid rgba(255,255,255,0.10);
       animation:slideUp 0.28s cubic-bezier(0.34,1.2,0.64,1);
@@ -222,28 +246,22 @@
     #modal-title  { font-size:18px; font-weight:700; color:#f1f5f9; margin-bottom:3px; }
     #modal-coords { font-size:11px; color:#475569; font-family:monospace; margin-bottom:16px; }
     #modal-input  {
-      width:100%;
-      background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.12);
-      border-radius:12px; padding:14px 16px;
-      font-size:16px; color:#f1f5f9; outline:none;
-      margin-bottom:16px; font-family:inherit;
-      transition:border-color 0.2s;
+      width:100%; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.12);
+      border-radius:12px; padding:14px 16px; font-size:16px; color:#f1f5f9; outline:none;
+      margin-bottom:16px; font-family:inherit; transition:border-color 0.2s;
     }
     #modal-input:focus { border-color:#f97316; }
     #modal-input::placeholder { color:#334155; }
-    #modal-btns  { display:flex; gap:10px; }
+    #modal-btns { display:flex; gap:10px; }
     #modal-cancel {
-      flex:1; padding:14px;
-      background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.10);
+      flex:1; padding:14px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.10);
       border-radius:12px; color:#64748b; font-size:15px; font-weight:600;
       cursor:pointer; font-family:inherit; transition:background 0.2s;
     }
-    #modal-cancel:hover { background:rgba(255,255,255,0.08); }
-    #modal-save  {
-      flex:2; padding:14px;
-      background:linear-gradient(135deg,#f97316,#ea580c); border:none;
+    #modal-save {
+      flex:2; padding:14px; background:linear-gradient(135deg,#f97316,#ea580c); border:none;
       border-radius:12px; color:#fff; font-size:15px; font-weight:700;
-      cursor:pointer; font-family:inherit; transition:opacity 0.2s;
+      cursor:pointer; font-family:inherit;
     }
     #modal-save:disabled { opacity:0.5; cursor:not-allowed; }
 
@@ -253,17 +271,14 @@
       transform:translateX(-50%) translateY(16px);
       background:rgba(15,23,42,0.92); color:#e2e8f0;
       padding:10px 20px; border-radius:999px;
-      font-size:13px; font-weight:500;
-      z-index:3000; opacity:0;
-      transition:all 0.3s ease;
-      border:1px solid rgba(255,255,255,0.08);
+      font-size:13px; font-weight:500; z-index:3000; opacity:0;
+      transition:all 0.3s ease; border:1px solid rgba(255,255,255,0.08);
       pointer-events:none; white-space:nowrap;
     }
-    #toast.show   { opacity:1; transform:translateX(-50%) translateY(0); }
-    #toast.ok     { border-color:rgba(34,197,94,0.35); color:#86efac; }
-    #toast.err    { border-color:rgba(239,68,68,0.35);  color:#fca5a5; }
+    #toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+    #toast.ok   { border-color:rgba(34,197,94,0.35); color:#86efac; }
+    #toast.err  { border-color:rgba(239,68,68,0.35);  color:#fca5a5; }
 
-    /* ─── LOADER (spinning) ─── */
     .spin { animation:spin 0.9s linear infinite; display:inline-block; }
     @keyframes spin { to{transform:rotate(360deg)} }
 
@@ -275,8 +290,7 @@
     .leaflet-control-attribution a { color:#64748b !important; }
     .leaflet-control-zoom { border:none !important; box-shadow:0 4px 18px rgba(0,0,0,0.35) !important; }
     .leaflet-control-zoom a {
-      background:rgba(15,23,42,0.85) !important;
-      backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
+      background:rgba(15,23,42,0.85) !important; backdrop-filter:blur(10px);
       color:#e2e8f0 !important; border:1px solid rgba(255,255,255,0.10) !important;
       font-size:18px !important; line-height:30px !important;
       width:34px !important; height:34px !important;
@@ -285,22 +299,49 @@
     .leaflet-bar a:last-child  { border-radius:0 0 12px 12px !important; }
   </style>
 </head>
-
 <body>
 
-  <!-- ── Pasek statusu GPS ── -->
-  <div id="status-bar">
-    <span id="status-dot"></span>
-    <span id="status-text">Gotowy do namierzenia</span>
+  <!-- ── Wyszukiwarka ── -->
+  <div id="search-wrap">
+    <div id="search-bar">
+      <svg class="search-icon" width="18" height="18" viewBox="0 0 24 24"
+           fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+        <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+      </svg>
+      <input id="search-input" type="text" placeholder="Szukaj miejsca…"
+             autocomplete="off" autocorrect="off" spellcheck="false" />
+      <button id="search-clear" aria-label="Wyczyść">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+    </div>
+    <div id="search-panel">
+      <!-- wyniki wyszukiwania wypełniane dynamicznie -->
+      <button id="btn-panel-add">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="2.8" stroke-linecap="round">
+          <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+        </svg>
+        Dodaj nowe miejsce
+      </button>
+    </div>
   </div>
 
-  <!-- ── Wskazówka ── -->
-  <div id="hint">📍 Przytrzymaj mapę, aby dodać miejsce</div>
+  <!-- ── GPS pill ── -->
+  <div id="gps-pill">
+    <span class="gps-pill-dot"></span>
+    <span id="gps-pill-text"></span>
+  </div>
+
+  <!-- ── Wskazówka trybu dodawania ── -->
+  <div id="hint"></div>
 
   <!-- ── Mapa ── -->
   <div id="map"></div>
 
-  <!-- ── Przyciski GPS ── -->
+  <!-- ── Przyciski dolne ── -->
   <div id="controls">
     <button class="btn" id="btn-locate">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
@@ -318,33 +359,12 @@
       </svg>
       Centruj na mnie
     </button>
-    <button class="btn" id="btn-stop">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-        <rect x="6" y="6" width="12" height="12" rx="2"/>
-      </svg>
-      Zatrzymaj śledzenie
-    </button>
-    <button class="btn" id="btn-add">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
-           stroke="currentColor" stroke-width="2.8" stroke-linecap="round">
-        <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-      </svg>
-      Dodaj miejsce
-    </button>
     <button class="btn" id="btn-clear-route">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
            stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
         <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
       </svg>
       Wyczyść trasę
-    </button>
-    <button class="btn" id="btn-places">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-           stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
-        <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/>
-        <circle cx="12" cy="9" r="2.5" fill="currentColor" stroke="none"/>
-      </svg>
-      <span id="places-label">Ładowanie…</span>
     </button>
   </div>
 
@@ -354,8 +374,7 @@
       <div id="modal-handle"></div>
       <div id="modal-title">📍 Dodaj miejsce</div>
       <div id="modal-coords"></div>
-      <input id="modal-input" type="text"
-             placeholder="Wpisz nazwę miejsca…"
+      <input id="modal-input" type="text" placeholder="Wpisz nazwę miejsca…"
              maxlength="80" autocomplete="off" />
       <div id="modal-btns">
         <button id="modal-cancel">Anuluj</button>
@@ -364,7 +383,7 @@
     </div>
   </div>
 
-  <!-- ── Toast powiadomień ── -->
+  <!-- ── Toast ── -->
   <div id="toast"></div>
 
   <script>
@@ -373,10 +392,10 @@
   // ╚══════════════════════════════════════════════════════════════════╝
   const CFG = {
     imageFile:   'mapa.jpg',
-imageBounds: [
-        [52.88182112013122, 21.0908532075908],   // Południowo-Zachodni narożnik // dolny lewy
-        [52.88580079438883, 21.096359724417756],   // Północno-Wschodni narożnik // górny prawy
-      ],
+    imageBounds: [
+      [52.88182112013122, 21.0908532075908],   // Południowo-Zachodni narożnik (dolny lewy)
+      [52.88580079438883, 21.096359724417756],  // Północno-Wschodni narożnik (górny prawy)
+    ],
     imageOpacity: 1.0,
   };
 
@@ -400,47 +419,49 @@ imageBounds: [
       (CFG.imageBounds[0][0] + CFG.imageBounds[1][0]) / 2,
       (CFG.imageBounds[0][1] + CFG.imageBounds[1][1]) / 2,
     ],
-    zoom: 15,
+    zoom: 17,
     zoomControl: true,
   });
 
-  // ──────────────────────────────────────────────────────────────────
-  // OPCJA A (domyślna): własny obraz jako mapa
   const imgLayer = L.imageOverlay(CFG.imageFile, CFG.imageBounds, {
     opacity: CFG.imageOpacity, attribution: 'Mapa własna',
   }).addTo(map);
-  imgLayer.on('load', () => map.fitBounds(CFG.imageBounds, { padding: [24,24] }));
-  map.fitBounds(CFG.imageBounds, { padding: [24,24] });
+  imgLayer.on('load', function() { map.fitBounds(CFG.imageBounds, { padding:[24,24] }); });
+  map.fitBounds(CFG.imageBounds, { padding:[24,24] });
 
-  // OPCJA B: kafelki OpenStreetMap (odkomentuj zamiast OPCJA A)
+  // OPCJA B: kafelki OpenStreetMap
   // L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   //   attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
   //   maxZoom: 19,
   // }).addTo(map);
-  // ──────────────────────────────────────────────────────────────────
 
   /* ── DOM ── */
-  const statusBar   = document.getElementById('status-bar');
-  const statusText  = document.getElementById('status-text');
-  const btnLocate   = document.getElementById('btn-locate');
-  const btnCenter   = document.getElementById('btn-center');
-  const btnStop     = document.getElementById('btn-stop');
-  const btnPlaces   = document.getElementById('btn-places');
-  const placesLabel = document.getElementById('places-label');
-  const modalOv     = document.getElementById('modal-overlay');
-  const modalInput  = document.getElementById('modal-input');
-  const modalCoords = document.getElementById('modal-coords');
-  const modalSave   = document.getElementById('modal-save');
-  const modalCancel = document.getElementById('modal-cancel');
-  const hintEl      = document.getElementById('hint');
-  const toastEl     = document.getElementById('toast');
+  const btnLocate     = document.getElementById('btn-locate');
+  const btnCenter     = document.getElementById('btn-center');
+  const btnClearRoute = document.getElementById('btn-clear-route');
+  const modalOv       = document.getElementById('modal-overlay');
+  const modalInput    = document.getElementById('modal-input');
+  const modalCoords   = document.getElementById('modal-coords');
+  const modalSave     = document.getElementById('modal-save');
+  const modalCancel   = document.getElementById('modal-cancel');
+  const hintEl        = document.getElementById('hint');
+  const toastEl       = document.getElementById('toast');
+  const gpsPill       = document.getElementById('gps-pill');
+  const gpsPillText   = document.getElementById('gps-pill-text');
+  const searchInput   = document.getElementById('search-input');
+  const searchBar     = document.getElementById('search-bar');
+  const searchPanel   = document.getElementById('search-panel');
+  const searchClear   = document.getElementById('search-clear');
+  const btnPanelAdd   = document.getElementById('btn-panel-add');
 
-  /* ── Stan GPS ── */
-  let watchId=null, userLat=null, userLng=null, gpsMarker=null, accCircle=null;
-
-  /* ── Stan miejsc ── */
-  let pendingLat=null, pendingLng=null;
-  const placeMarkers = {};   // id → Leaflet marker
+  /* ── Stan ── */
+  let watchId    = null, isTracking = false;
+  let userLat    = null, userLng = null;
+  let gpsMarker  = null, accCircle = null;
+  let pendingLat = null, pendingLng = null;
+  let addMode    = false;
+  let allPlaces  = [];        // cache do wyszukiwarki
+  const placeMarkers = {};    // id → Leaflet marker
 
   // ════════════════════════════════════════════════════════════════════
   //  TOAST
@@ -450,142 +471,118 @@ imageBounds: [
     toastEl.textContent = msg;
     toastEl.className = 'show ' + (type || '');
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => { toastEl.className = ''; }, 3000);
+    toastTimer = setTimeout(function() { toastEl.className = ''; }, 3000);
   }
 
   // ════════════════════════════════════════════════════════════════════
-  //  AIRTABLE — inicjalizacja pól lat / lng
+  //  WYSZUKIWARKA
   // ════════════════════════════════════════════════════════════════════
-  async function initFields() {
-    for (const name of ['lat','lng']) {
-      await fetch(AT.metaUrl, {
-        method: 'POST', headers: AT.h,
-        body: JSON.stringify({ name, type:'number', options:{ precision:8 } }),
-      }).catch(() => {});  // ignorujemy błędy (pole może już istnieć)
+  function openSearchPanel() {
+    searchBar.classList.add('open');
+    searchPanel.classList.add('show');
+    renderSearchResults(searchInput.value);
+  }
+  function closeSearchPanel() {
+    searchBar.classList.remove('open');
+    searchPanel.classList.remove('show');
+    searchInput.blur();
+  }
+
+  function renderSearchResults(query) {
+    // Usuń stare wyniki (zachowaj btn-panel-add)
+    Array.from(searchPanel.querySelectorAll('.search-result, .search-empty'))
+      .forEach(function(el) { el.remove(); });
+
+    var q = query.trim().toLowerCase();
+    var filtered = q
+      ? allPlaces.filter(function(p) { return p.name.toLowerCase().includes(q); })
+      : allPlaces;
+
+    if (filtered.length === 0 && q) {
+      var empty = document.createElement('div');
+      empty.className = 'search-empty';
+      empty.textContent = 'Brak wyników dla „' + query + '"';
+      searchPanel.insertBefore(empty, btnPanelAdd);
+    } else {
+      filtered.forEach(function(place) {
+        var el = document.createElement('div');
+        el.className = 'search-result';
+        el.innerHTML =
+          '<svg class="sr-icon" width="14" height="14" viewBox="0 0 24 24" fill="currentColor">' +
+          '<path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/></svg>' +
+          '<div><div class="sr-name">' + place.name.replace(/</g,'&lt;') + '</div>' +
+          '<div class="sr-coord">' + place.lat.toFixed(5) + ', ' + place.lng.toFixed(5) + '</div></div>';
+        el.addEventListener('click', function() {
+          closeSearchPanel();
+          map.setView([place.lat, place.lng], 19, { animate: true });
+          if (placeMarkers[place.id]) {
+            setTimeout(function() { placeMarkers[place.id].openPopup(); }, 400);
+          }
+        });
+        searchPanel.insertBefore(el, btnPanelAdd);
+      });
     }
   }
 
+  searchInput.addEventListener('focus', function() { openSearchPanel(); });
+  searchInput.addEventListener('input', function() {
+    renderSearchResults(searchInput.value);
+    searchClear.classList.toggle('show', searchInput.value.length > 0);
+  });
+  searchClear.addEventListener('click', function() {
+    searchInput.value = '';
+    searchClear.classList.remove('show');
+    renderSearchResults('');
+    searchInput.focus();
+  });
+
+  // Zamknij panel po kliknięciu w mapę
+  map.on('click', function() { closeSearchPanel(); });
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') closeSearchPanel();
+  });
+
   // ════════════════════════════════════════════════════════════════════
-  //  AIRTABLE — pobierz wszystkie miejsca
+  //  TRYB DODAWANIA MIEJSCA
   // ════════════════════════════════════════════════════════════════════
-  async function fetchPlaces() {
-    const res  = await fetch(AT.url + '?maxRecords=200', { headers: AT.h });
-    const data = await res.json();
-    if (!res.ok) throw new Error((data.error && data.error.message) || 'Błąd Airtable');
-    return (data.records || [])
-      .filter(function(r){ return r.fields.lat != null && r.fields.lng != null; })
-      .map(function(r){ return {
-        id:   r.id,
-        name: String(r.fields.miejsce || '(bez nazwy)'),
-        lat:  Number(r.fields.lat),
-        lng:  Number(r.fields.lng),
-      }; });
+  function enterAddMode() {
+    addMode = true;
+    closeSearchPanel();
+    hintEl.className = 'add-mode';
+    hintEl.textContent = '📍 Dotknij mapę, aby wybrać lokalizację';
+    map.getContainer().style.cursor = 'crosshair';
+  }
+  function exitAddMode() {
+    addMode = false;
+    hintEl.className = '';
+    hintEl.textContent = '';
+    map.getContainer().style.cursor = '';
   }
 
-  // ════════════════════════════════════════════════════════════════════
-  //  AIRTABLE — dodaj miejsce
-  // ════════════════════════════════════════════════════════════════════
-  async function createPlace(name, lat, lng) {
-    const res  = await fetch(AT.url, {
-      method: 'POST', headers: AT.h,
-      body: JSON.stringify({ records:[{ fields:{ miejsce:name, lat:lat, lng:lng } }] }),
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error((data.error && data.error.message) || 'Błąd zapisu');
-    const r = data.records[0];
-    return { id:r.id, name:r.fields.miejsce||name, lat:r.fields.lat||lat, lng:r.fields.lng||lng };
-  }
+  btnPanelAdd.addEventListener('click', function() { enterAddMode(); });
+
+  map.on('click', function(e) {
+    if (!addMode) return;
+    exitAddMode();
+    showAddModal(e.latlng.lat, e.latlng.lng);
+  });
+  map.on('contextmenu', function(e) {
+    exitAddMode();
+    showAddModal(e.latlng.lat, e.latlng.lng);
+  });
 
   // ════════════════════════════════════════════════════════════════════
-  //  AIRTABLE — usuń miejsce
-  // ════════════════════════════════════════════════════════════════════
-  async function destroyPlace(id) {
-    const res = await fetch(AT.url + '/' + id, { method:'DELETE', headers:AT.h });
-    if (!res.ok) throw new Error('Błąd usuwania');
-  }
-
-  // ════════════════════════════════════════════════════════════════════
-  //  RENDEROWANIE MARKERA MIEJSCA
-  // ════════════════════════════════════════════════════════════════════
-  function renderPlace(place) {
-    if (placeMarkers[place.id]) {
-      map.removeLayer(placeMarkers[place.id]);
-    }
-    const icon = L.divIcon({
-      className: '', iconSize:[16,16], iconAnchor:[8,8], popupAnchor:[0,-12],
-      html: '<div class="place-dot"></div>',
-    });
-    const marker = L.marker([place.lat, place.lng], { icon }).addTo(map);
-
-    // Popup
-    const safe = place.name.replace(/</g,'&lt;').replace(/>/g,'&gt;');
-    marker.bindPopup(
-      '<div class="popup-name">' + safe + '</div>' +
-      '<div class="popup-coords">' + place.lat.toFixed(5) + ', ' + place.lng.toFixed(5) + '</div>' +
-      '<button class="popup-nav" onclick="handleNavigate(' + place.lng.toFixed(7) + ',' + place.lat.toFixed(7) + ')">🧭 Nawiguj tutaj</button>' +
-      '<button class="popup-delete" onclick="handleDelete(\'' + place.id + '\')">🗑 Usuń miejsce</button>',
-      { maxWidth: 220, className: '' }
-    );
-
-    placeMarkers[place.id] = marker;
-  }
-
-  function clearPlaceMarkers() {
-    Object.values(placeMarkers).forEach(function(m){ map.removeLayer(m); });
-    Object.keys(placeMarkers).forEach(function(k){ delete placeMarkers[k]; });
-  }
-
-  // ════════════════════════════════════════════════════════════════════
-  //  ŁADOWANIE WSZYSTKICH MIEJSC
-  // ════════════════════════════════════════════════════════════════════
-  async function loadPlaces() {
-    placesLabel.textContent = 'Ładowanie…';
-    btnPlaces.style.display = 'flex';
-    try {
-      const places = await fetchPlaces();
-      clearPlaceMarkers();
-      places.forEach(renderPlace);
-      placesLabel.textContent = places.length + (places.length === 1 ? ' miejsce' : ' miejsc');
-    } catch(e) {
-      showToast('⚠ Błąd ładowania: ' + e.message, 'err');
-      placesLabel.textContent = 'Błąd';
-    }
-  }
-
-  // Odświeżaj co 30 s
-  btnPlaces.addEventListener('click', loadPlaces);
-  setInterval(loadPlaces, 30000);
-
-  // ════════════════════════════════════════════════════════════════════
-  //  USUWANIE MIEJSCA (wywoływane z popup)
-  // ════════════════════════════════════════════════════════════════════
-  window.handleDelete = async function(id) {
-    try {
-      await destroyPlace(id);
-      if (placeMarkers[id]) { map.removeLayer(placeMarkers[id]); delete placeMarkers[id]; }
-      map.closePopup();
-      const n = Object.keys(placeMarkers).length;
-      placesLabel.textContent = n + (n===1?' miejsce':' miejsc');
-      showToast('✓ Usunięto miejsce', 'ok');
-    } catch(e) {
-      showToast('⚠ Błąd: ' + e.message, 'err');
-    }
-  };
-
-  // ════════════════════════════════════════════════════════════════════
-  //  MODAL — pokaż / ukryj
+  //  MODAL — dodaj miejsce
   // ════════════════════════════════════════════════════════════════════
   function showAddModal(lat, lng) {
-    pendingLat = lat;
-    pendingLng = lng;
+    pendingLat = lat; pendingLng = lng;
     modalCoords.textContent = lat.toFixed(5) + ', ' + lng.toFixed(5);
     modalInput.value = '';
     modalSave.disabled = false;
     modalSave.textContent = '💾 Zapisz';
     modalOv.classList.add('show');
-    setTimeout(function(){ modalInput.focus(); }, 320);
+    setTimeout(function() { modalInput.focus(); }, 320);
   }
-
   function hideModal() {
     modalOv.classList.remove('show');
     pendingLat = null; pendingLng = null;
@@ -593,21 +590,23 @@ imageBounds: [
   }
 
   modalCancel.addEventListener('click', hideModal);
-  modalOv.addEventListener('click', function(e){ if(e.target===modalOv) hideModal(); });
+  modalOv.addEventListener('click', function(e) { if (e.target === modalOv) hideModal(); });
+  modalInput.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') modalSave.click();
+    if (e.key === 'Escape') hideModal();
+  });
 
-  // Zapis miejsca
   modalSave.addEventListener('click', async function() {
-    const name = modalInput.value.trim();
+    var name = modalInput.value.trim();
     if (!name) { modalInput.focus(); return; }
     modalSave.disabled = true;
     modalSave.innerHTML =
       '<span class="spin"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">' +
       '<path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg></span> Zapisuję…';
     try {
-      const place = await createPlace(name, pendingLat, pendingLng);
+      var place = await createPlace(name, pendingLat, pendingLng);
+      allPlaces.push(place);
       renderPlace(place);
-      const n = Object.keys(placeMarkers).length;
-      placesLabel.textContent = n + (n===1?' miejsce':' miejsc');
       hideModal();
       showToast('✓ Zapisano: ' + name, 'ok');
     } catch(e) {
@@ -617,166 +616,196 @@ imageBounds: [
     }
   });
 
-  modalInput.addEventListener('keydown', function(e){
-    if (e.key==='Enter') modalSave.click();
-    if (e.key==='Escape') hideModal();
-  });
-
   // ════════════════════════════════════════════════════════════════════
-  //  TRYB DODAWANIA MIEJSCA
+  //  GPS
   // ════════════════════════════════════════════════════════════════════
-  let addMode = false;
-  const btnAdd = document.getElementById('btn-add');
-
-  function enterAddMode() {
-    addMode = true;
-    btnAdd.classList.add('active');
-    btnAdd.innerHTML =
-      '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round">' +
-      '<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> Dotknij mapę…';
-    hintEl.className = 'add-mode';
-    hintEl.textContent = '📍 Dotknij mapę, aby wybrać lokalizację';
-    map.getContainer().style.cursor = 'crosshair';
-  }
-
-  function exitAddMode() {
-    addMode = false;
-    btnAdd.classList.remove('active');
-    btnAdd.innerHTML =
-      '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round">' +
-      '<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Dodaj miejsce';
-    hintEl.className = '';
-    map.getContainer().style.cursor = '';
-  }
-
-  btnAdd.addEventListener('click', function() {
-    if (addMode) { exitAddMode(); } else { enterAddMode(); }
-  });
-
-  // Kliknięcie/tap w mapę w trybie dodawania
-  map.on('click', function(e) {
-    if (!addMode) return;
-    exitAddMode();
-    showAddModal(e.latlng.lat, e.latlng.lng);
-  });
-
-  // Prawy klik (desktop) — zawsze działa jako skrót
-  map.on('contextmenu', function(e) {
-    exitAddMode();
-    showAddModal(e.latlng.lat, e.latlng.lng);
-  });
-
-  // ════════════════════════════════════════════════════════════════════
-  //  GPS — STATUS
-  // ════════════════════════════════════════════════════════════════════
-  function setStatus(state, text) {
-    statusBar.className = state;
-    statusText.textContent = text;
-  }
-
-  const GPS_ERRORS = { 1:'Brak zgody na lokalizację', 2:'Pozycja niedostępna', 3:'Przekroczono czas' };
-
-  function onGeoError(err) {
-    setStatus('error', GPS_ERRORS[err.code] || err.message);
-    btnLocate.disabled = false; resetLocateBtn();
-  }
-
-  function resetLocateBtn() {
-    btnLocate.innerHTML =
-      '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">' +
-      '<path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/>' +
-      '<circle cx="12" cy="9" r="2.5" fill="white" stroke="none"/></svg> Gdzie jestem?';
-  }
-
   const gpsIcon = L.divIcon({
     className:'', iconSize:[24,24], iconAnchor:[12,12],
     html:'<div class="gps-wrapper"><div class="gps-pulse"></div><div class="gps-dot"></div></div>',
   });
 
+  function setLocateIdle() {
+    btnLocate.classList.remove('tracking');
+    btnLocate.disabled = false;
+    btnLocate.innerHTML =
+      '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">' +
+      '<path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/>' +
+      '<circle cx="12" cy="9" r="2.5" fill="white" stroke="none"/></svg> Gdzie jestem?';
+  }
+  function setLocateTracking() {
+    btnLocate.classList.add('tracking');
+    btnLocate.disabled = false;
+    btnLocate.innerHTML =
+      '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">' +
+      '<rect x="6" y="6" width="12" height="12" rx="2"/></svg> Zatrzymaj śledzenie';
+  }
+
   function updateMarker(lat, lng, accuracy) {
-    userLat=lat; userLng=lng;
+    userLat = lat; userLng = lng;
+    var acc = accuracy < 1000 ? '±' + Math.round(accuracy) + ' m' : '±' + (accuracy/1000).toFixed(1) + ' km';
+    gpsPill.classList.add('show');
+    gpsPillText.textContent = lat.toFixed(5) + ', ' + lng.toFixed(5) + '  ' + acc;
+
     if (gpsMarker) {
-      gpsMarker.setLatLng([lat,lng]);
-      accCircle.setLatLng([lat,lng]).setRadius(accuracy);
+      gpsMarker.setLatLng([lat, lng]);
+      accCircle.setLatLng([lat, lng]).setRadius(accuracy);
     } else {
-      gpsMarker = L.marker([lat,lng], { icon:gpsIcon, zIndexOffset:1000 }).addTo(map);
-      accCircle  = L.circle([lat,lng], { radius:accuracy, color:'#2563eb', fillColor:'#93c5fd', fillOpacity:0.15, weight:1.5 }).addTo(map);
-      map.setView([lat,lng], 17);
+      gpsMarker = L.marker([lat, lng], { icon: gpsIcon, zIndexOffset: 1000 }).addTo(map);
+      accCircle  = L.circle([lat, lng], { radius: accuracy, color:'#2563eb', fillColor:'#93c5fd', fillOpacity:0.15, weight:1.5 }).addTo(map);
+      map.setView([lat, lng], 18);
       btnCenter.style.display = 'flex';
-      btnStop.style.display   = 'flex';
+      isTracking = true;
+      setLocateTracking();
     }
-    const acc = accuracy < 1000 ? '±'+Math.round(accuracy)+' m' : '±'+(accuracy/1000).toFixed(1)+' km';
-    setStatus('tracking', lat.toFixed(5)+', '+lng.toFixed(5)+'   '+acc);
+  }
+
+  function stopTracking() {
+    if (watchId !== null) { navigator.geolocation.clearWatch(watchId); watchId = null; }
+    isTracking = false;
+    btnCenter.style.display = 'none';
+    gpsPill.classList.remove('show');
+    setLocateIdle();
   }
 
   btnLocate.addEventListener('click', function() {
-    if (!navigator.geolocation) { setStatus('error','Geolokalizacja nieobsługiwana'); return; }
-    if (watchId !== null) { navigator.geolocation.clearWatch(watchId); watchId=null; }
+    if (isTracking) { stopTracking(); return; }
+    if (!navigator.geolocation) { showToast('⚠ Geolokalizacja nieobsługiwana', 'err'); return; }
+
     btnLocate.disabled = true;
     btnLocate.innerHTML =
       '<span class="spin"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">' +
       '<path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg></span> Namierzam…';
-    setStatus('locating','Namierzam pozycję…');
+
+    if (watchId !== null) { navigator.geolocation.clearWatch(watchId); watchId = null; }
 
     navigator.geolocation.getCurrentPosition(function(pos) {
       updateMarker(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy);
-      btnLocate.disabled=false; resetLocateBtn();
       watchId = navigator.geolocation.watchPosition(
-        function(p){ updateMarker(p.coords.latitude, p.coords.longitude, p.coords.accuracy); },
-        onGeoError,
-        { enableHighAccuracy:true, maximumAge:3000, timeout:10000 }
+        function(p) { updateMarker(p.coords.latitude, p.coords.longitude, p.coords.accuracy); },
+        function(err) { showToast('⚠ GPS: ' + (err.code === 1 ? 'brak zgody' : err.message), 'err'); },
+        { enableHighAccuracy: true, maximumAge: 3000, timeout: 10000 }
       );
-    }, onGeoError, { enableHighAccuracy:true, timeout:15000, maximumAge:0 });
+    }, function(err) {
+      btnLocate.disabled = false; setLocateIdle();
+      var msg = { 1:'Brak zgody na lokalizację', 2:'Pozycja niedostępna', 3:'Przekroczono czas' };
+      showToast('⚠ ' + (msg[err.code] || err.message), 'err');
+    }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
   });
 
   btnCenter.addEventListener('click', function() {
-    if (userLat !== null) map.setView([userLat,userLng], map.getZoom(), { animate:true });
+    if (userLat !== null) map.setView([userLat, userLng], map.getZoom(), { animate: true });
   });
 
-  btnStop.addEventListener('click', function() {
-    if (watchId!==null) { navigator.geolocation.clearWatch(watchId); watchId=null; }
-    btnCenter.style.display='none'; btnStop.style.display='none';
-    setStatus('idle','Śledzenie zatrzymane');
-  });
+  // ════════════════════════════════════════════════════════════════════
+  //  AIRTABLE
+  // ════════════════════════════════════════════════════════════════════
+  async function initFields() {
+    for (var fn of ['lat','lng']) {
+      await fetch(AT.metaUrl, {
+        method:'POST', headers:AT.h,
+        body:JSON.stringify({ name:fn, type:'number', options:{ precision:8 } }),
+      }).catch(function(){});
+    }
+  }
+  async function fetchPlaces() {
+    var res  = await fetch(AT.url + '?maxRecords=200', { headers: AT.h });
+    var data = await res.json();
+    if (!res.ok) throw new Error((data.error && data.error.message) || 'Błąd Airtable');
+    return (data.records || [])
+      .filter(function(r) { return r.fields.lat != null && r.fields.lng != null; })
+      .map(function(r) { return {
+        id:   r.id,
+        name: String(r.fields.miejsce || '(bez nazwy)'),
+        lat:  Number(r.fields.lat),
+        lng:  Number(r.fields.lng),
+      }; });
+  }
+  async function createPlace(name, lat, lng) {
+    var res  = await fetch(AT.url, {
+      method:'POST', headers:AT.h,
+      body:JSON.stringify({ records:[{ fields:{ miejsce:name, lat:lat, lng:lng } }] }),
+    });
+    var data = await res.json();
+    if (!res.ok) throw new Error((data.error && data.error.message) || 'Błąd zapisu');
+    var r = data.records[0];
+    return { id:r.id, name:r.fields.miejsce||name, lat:r.fields.lat||lat, lng:r.fields.lng||lng };
+  }
+  async function destroyPlace(id) {
+    var res = await fetch(AT.url + '/' + id, { method:'DELETE', headers:AT.h });
+    if (!res.ok) throw new Error('Błąd usuwania');
+  }
+
+  // ════════════════════════════════════════════════════════════════════
+  //  MARKERY MIEJSC
+  // ════════════════════════════════════════════════════════════════════
+  function renderPlace(place) {
+    if (placeMarkers[place.id]) map.removeLayer(placeMarkers[place.id]);
+    var icon = L.divIcon({
+      className:'', iconSize:[16,16], iconAnchor:[8,8], popupAnchor:[0,-12],
+      html:'<div class="place-dot"></div>',
+    });
+    var marker = L.marker([place.lat, place.lng], { icon: icon }).addTo(map);
+    var safe = place.name.replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    marker.bindPopup(
+      '<div class="popup-name">' + safe + '</div>' +
+      '<div class="popup-coords">' + place.lat.toFixed(5) + ', ' + place.lng.toFixed(5) + '</div>' +
+      '<button class="popup-nav" onclick="handleNavigate(' + place.lng.toFixed(7) + ',' + place.lat.toFixed(7) + ')">🧭 Nawiguj tutaj</button>' +
+      '<button class="popup-delete" onclick="handleDelete(\'' + place.id + '\')">🗑 Usuń miejsce</button>',
+      { maxWidth: 220 }
+    );
+    placeMarkers[place.id] = marker;
+  }
+
+  window.handleDelete = async function(id) {
+    try {
+      await destroyPlace(id);
+      if (placeMarkers[id]) { map.removeLayer(placeMarkers[id]); delete placeMarkers[id]; }
+      allPlaces = allPlaces.filter(function(p) { return p.id !== id; });
+      map.closePopup();
+      showToast('✓ Usunięto miejsce', 'ok');
+    } catch(e) { showToast('⚠ Błąd: ' + e.message, 'err'); }
+  };
+
+  async function loadPlaces() {
+    try {
+      var places = await fetchPlaces();
+      Object.values(placeMarkers).forEach(function(m) { map.removeLayer(m); });
+      Object.keys(placeMarkers).forEach(function(k) { delete placeMarkers[k]; });
+      allPlaces = places;
+      places.forEach(renderPlace);
+    } catch(e) { showToast('⚠ Błąd ładowania: ' + e.message, 'err'); }
+  }
+  setInterval(loadPlaces, 30000);
 
   // ════════════════════════════════════════════════════════════════════
   //  NAWIGACJA — HYBRYDOWY ALGORYTM (SIEĆ DRÓG + LINIA PROSTA)
   // ════════════════════════════════════════════════════════════════════
-  let roadGraph   = null;
-  let routeLayers = [];
-  const btnClearRoute = document.getElementById('btn-clear-route');
+  var roadGraph   = null;
+  var routeLayers = [];
 
-  // ── Wstaw punkt przecięcia w segment linii ──
   function insertPointIntoLine(coords, pt) {
-    let bestIdx = 0, bestDist = Infinity;
-    for (let i = 0; i < coords.length - 1; i++) {
+    var bestIdx = 0, bestDist = Infinity;
+    for (var i = 0; i < coords.length - 1; i++) {
       try {
-        const snap = turf.nearestPointOnLine(
-          turf.lineString([coords[i], coords[i + 1]]),
-          turf.point(pt)
+        var snap = turf.nearestPointOnLine(
+          turf.lineString([coords[i], coords[i+1]]), turf.point(pt)
         );
-        if (snap.properties.dist < bestDist) {
-          bestDist = snap.properties.dist;
-          bestIdx  = i;
-        }
+        if (snap.properties.dist < bestDist) { bestDist = snap.properties.dist; bestIdx = i; }
       } catch(e) {}
     }
-    const T = 0.00008;
-    const nA = coords[bestIdx],     nearA = Math.abs(nA[0]-pt[0])<T && Math.abs(nA[1]-pt[1])<T;
-    const nB = coords[bestIdx + 1], nearB = nB && Math.abs(nB[0]-pt[0])<T && Math.abs(nB[1]-pt[1])<T;
-    if (!nearA && !nearB) coords.splice(bestIdx + 1, 0, [pt[0], pt[1]]);
+    var T = 0.00008;
+    var nA = coords[bestIdx], nearA = Math.abs(nA[0]-pt[0])<T && Math.abs(nA[1]-pt[1])<T;
+    var nB = coords[bestIdx+1], nearB = nB && Math.abs(nB[0]-pt[0])<T && Math.abs(nB[1]-pt[1])<T;
+    if (!nearA && !nearB) coords.splice(bestIdx+1, 0, [pt[0], pt[1]]);
   }
 
-  // ── Budowanie grafu z sieci GeoJSON + wykrywanie przecięć ──
   function buildRoadGraph(geojson) {
-    const lines     = geojson.features.filter(f => f.geometry.type === 'LineString');
-    const lineCoords = lines.map(l => l.geometry.coordinates.map(c => [c[0], c[1]]));
-
-    // Znajdź przecięcia geometryczne między każdą parą linii
-    for (let i = 0; i < lines.length; i++) {
-      for (let j = i + 1; j < lines.length; j++) {
+    var lines     = geojson.features.filter(function(f) { return f.geometry.type === 'LineString'; });
+    var lineCoords = lines.map(function(l) { return l.geometry.coordinates.map(function(c) { return [c[0],c[1]]; }); });
+    for (var i = 0; i < lines.length; i++) {
+      for (var j = i+1; j < lines.length; j++) {
         try {
-          const ix = turf.lineIntersect(lines[i], lines[j]);
+          var ix = turf.lineIntersect(lines[i], lines[j]);
           ix.features.forEach(function(pt) {
             insertPointIntoLine(lineCoords[i], pt.geometry.coordinates);
             insertPointIntoLine(lineCoords[j], pt.geometry.coordinates);
@@ -784,208 +813,109 @@ imageBounds: [
         } catch(e) {}
       }
     }
-
-    // Snap współrzędnych do węzłów grafu (tolerancja ~4 m)
-    const SNAP = 0.00004;
-    const graph = {}, nodeCoords = {};
-
-    function key(c) {
-      return (Math.round(c[1]/SNAP)*SNAP).toFixed(6) + ',' +
-             (Math.round(c[0]/SNAP)*SNAP).toFixed(6);
-    }
-
+    var SNAP = 0.00004, graph = {}, nodeCoords = {};
+    function key(c) { return (Math.round(c[1]/SNAP)*SNAP).toFixed(6)+','+(Math.round(c[0]/SNAP)*SNAP).toFixed(6); }
     lineCoords.forEach(function(coords) {
-      for (var i = 0; i < coords.length - 1; i++) {
-        var a = coords[i], b = coords[i + 1];
-        var ka = key(a), kb = key(b);
-        nodeCoords[ka] = a;
-        nodeCoords[kb] = b;
-        var d = turf.distance(turf.point(a), turf.point(b), {units: 'meters'});
-        if (d < 0.1) continue;
-        if (!graph[ka]) graph[ka] = [];
-        if (!graph[kb]) graph[kb] = [];
-        graph[ka].push({to: kb, dist: d});
-        graph[kb].push({to: ka, dist: d});
+      for (var k = 0; k < coords.length-1; k++) {
+        var a=coords[k], b=coords[k+1], ka=key(a), kb=key(b);
+        nodeCoords[ka]=a; nodeCoords[kb]=b;
+        var d=turf.distance(turf.point(a),turf.point(b),{units:'meters'});
+        if (d<0.1) continue;
+        if (!graph[ka]) graph[ka]=[];
+        if (!graph[kb]) graph[kb]=[];
+        graph[ka].push({to:kb,dist:d}); graph[kb].push({to:ka,dist:d});
       }
     });
-
     return { graph, nodeCoords, key };
   }
 
-  // ── Algorytm Dijkstry — najkrótsza trasa po sieci ──
   function dijkstra(startKey, endKey) {
-    var g = roadGraph.graph, nc = roadGraph.nodeCoords;
-    if (!g[startKey] || !g[endKey]) return null;
-    if (startKey === endKey) return [nc[startKey]];
-
-    var dist = {}, prev = {}, visited = new Set();
-    Object.keys(g).forEach(function(k) { dist[k] = Infinity; });
-    dist[startKey] = 0;
-    var queue = [{key: startKey, d: 0}];
-
+    var g=roadGraph.graph, nc=roadGraph.nodeCoords;
+    if (!g[startKey]||!g[endKey]) return null;
+    if (startKey===endKey) return [nc[startKey]];
+    var dist={}, prev={}, visited=new Set();
+    Object.keys(g).forEach(function(k){ dist[k]=Infinity; });
+    dist[startKey]=0;
+    var queue=[{key:startKey,d:0}];
     while (queue.length) {
-      queue.sort(function(a, b) { return a.d - b.d; });
-      var u = queue.shift().key;
-      if (visited.has(u)) continue;
-      visited.add(u);
-      if (u === endKey) break;
-      (g[u] || []).forEach(function(edge) {
-        var alt = dist[u] + edge.dist;
-        if (alt < (dist[edge.to] !== undefined ? dist[edge.to] : Infinity)) {
-          dist[edge.to] = alt;
-          prev[edge.to] = u;
-          queue.push({key: edge.to, d: alt});
+      queue.sort(function(a,b){ return a.d-b.d; });
+      var u=queue.shift().key;
+      if (visited.has(u)) continue; visited.add(u);
+      if (u===endKey) break;
+      (g[u]||[]).forEach(function(edge){
+        var alt=dist[u]+edge.dist;
+        if (alt<(dist[edge.to]!==undefined?dist[edge.to]:Infinity)) {
+          dist[edge.to]=alt; prev[edge.to]=u; queue.push({key:edge.to,d:alt});
         }
       });
     }
-
     if (!isFinite(dist[endKey])) return null;
-    var path = [], cur = endKey;
-    while (cur) { path.unshift(nc[cur]); cur = prev[cur] || null; }
+    var path=[], cur=endKey;
+    while (cur) { path.unshift(nc[cur]); cur=prev[cur]||null; }
     return path;
   }
 
-  // ── Najbliższy węzeł grafu do podanego punktu ──
   function findNearestNode(coord) {
-    var bestKey = null, bestDist = Infinity;
-    Object.keys(roadGraph.nodeCoords).forEach(function(k) {
-      var d = turf.distance(turf.point(coord), turf.point(roadGraph.nodeCoords[k]), {units: 'meters'});
-      if (d < bestDist) { bestDist = d; bestKey = k; }
+    var bestKey=null, bestDist=Infinity;
+    Object.keys(roadGraph.nodeCoords).forEach(function(k){
+      var d=turf.distance(turf.point(coord),turf.point(roadGraph.nodeCoords[k]),{units:'meters'});
+      if (d<bestDist){ bestDist=d; bestKey=k; }
     });
-    return { key: bestKey, coord: roadGraph.nodeCoords[bestKey], dist: bestDist };
+    return { key:bestKey, coord:roadGraph.nodeCoords[bestKey], dist:bestDist };
   }
 
-  // ── Rysowanie trasy awaryjnej (linia prosta / azymut) ──
   function drawStraightRoute(from, to, label) {
-    routeLayers.push(L.polyline(
-      [[from[1], from[0]], [to[1], to[0]]],
-      {color: '#2563eb', weight: 3, dashArray: '10 8', opacity: 0.85}
-    ).addTo(map));
-    var dist = Math.round(turf.distance(turf.point(from), turf.point(to), {units: 'meters'}));
-    map.fitBounds([[from[1],from[0]], [to[1],to[0]]], {padding: [60, 60]});
-    showToast('🧭 ' + (label || 'Linia prosta') + ': ' + dist + ' m', 'ok');
-    btnClearRoute.style.display = 'flex';
+    routeLayers.push(L.polyline([[from[1],from[0]],[to[1],to[0]]],
+      {color:'#2563eb',weight:3,dashArray:'10 8',opacity:0.85}).addTo(map));
+    var dist=Math.round(turf.distance(turf.point(from),turf.point(to),{units:'meters'}));
+    map.fitBounds([[from[1],from[0]],[to[1],to[0]]],{padding:[60,60]});
+    showToast('🧭 '+(label||'Linia prosta')+': '+dist+' m','ok');
+    btnClearRoute.style.display='flex';
   }
 
-  // ── Wyczyść trasę z mapy ──
   function clearRoute() {
-    routeLayers.forEach(function(l) { map.removeLayer(l); });
-    routeLayers = [];
-    btnClearRoute.style.display = 'none';
+    routeLayers.forEach(function(l){ map.removeLayer(l); });
+    routeLayers=[]; btnClearRoute.style.display='none';
   }
 
-  // ── Główna funkcja nawigacji ──
   function navigateTo(destCoord) {
     clearRoute();
-
-    if (userLat === null) {
-      showToast('⚠ Uruchom GPS przed nawigacją', 'err');
-      return;
-    }
-
-    var userCoord  = [userLng, userLat];
-    var MAX_SNAP   = 300; // m — próg poza siecią dróg
-
-    // Brak załadowanej sieci → linia prosta
-    if (!roadGraph || !Object.keys(roadGraph.graph).length) {
-      drawStraightRoute(userCoord, destCoord, 'Brak sieci – linia prosta');
-      return;
-    }
-
-    var uN = findNearestNode(userCoord);
-    var dN = findNearestNode(destCoord);
-
-    // Zbyt daleko od sieci → linia prosta
-    if (uN.dist > MAX_SNAP || dN.dist > MAX_SNAP) {
-      drawStraightRoute(userCoord, destCoord, 'Poza siecią – linia prosta');
-      return;
-    }
-
-    var path = dijkstra(uN.key, dN.key);
-
-    // Sieć nieciągła → linia prosta
-    if (!path || path.length < 1) {
-      drawStraightRoute(userCoord, destCoord, 'Sieć nieciągła – linia prosta');
-      return;
-    }
-
-    // ── Krok 1: kreskowana linia dojścia użytkownik → wejście na sieć ──
-    if (uN.dist > 3) {
-      routeLayers.push(L.polyline(
-        [[userLat, userLng], [uN.coord[1], uN.coord[0]]],
-        {color: '#2563eb', weight: 2.5, dashArray: '7 9', opacity: 0.78}
-      ).addTo(map));
-    }
-
-    // ── Krok 2: gruba ciągła linia po sieci dróg ──
-    if (path.length >= 2) {
-      routeLayers.push(L.polyline(
-        path.map(function(c) { return [c[1], c[0]]; }),
-        {color: '#2563eb', weight: 5, opacity: 0.92}
-      ).addTo(map));
-    }
-
-    // ── Krok 3: kreskowana linia wyjście z sieci → cel ──
-    if (dN.dist > 3) {
-      routeLayers.push(L.polyline(
-        [[dN.coord[1], dN.coord[0]], [destCoord[1], destCoord[0]]],
-        {color: '#2563eb', weight: 2.5, dashArray: '7 9', opacity: 0.78}
-      ).addTo(map));
-    }
-
-    // Dopasuj widok
-    var allPts = [[userLat, userLng]].concat(
-      path.map(function(c) { return [c[1], c[0]]; }),
-      [[destCoord[1], destCoord[0]]]
-    );
-    map.fitBounds(allPts, {padding: [40, 40]});
-
-    // Podsumowanie odległości
-    var roadDist = path.length >= 2
-      ? turf.length(turf.lineString(path), {units: 'meters'}) : 0;
-    var totalDist = Math.round(uN.dist + roadDist + dN.dist);
-    showToast('🧭 Trasa: ~' + totalDist + ' m', 'ok');
-    btnClearRoute.style.display = 'flex';
+    if (userLat===null){ showToast('⚠ Uruchom GPS przed nawigacją','err'); return; }
+    var userCoord=[userLng,userLat], MAX_SNAP=300;
+    if (!roadGraph||!Object.keys(roadGraph.graph).length){ drawStraightRoute(userCoord,destCoord,'Brak sieci – linia prosta'); return; }
+    var uN=findNearestNode(userCoord), dN=findNearestNode(destCoord);
+    if (uN.dist>MAX_SNAP||dN.dist>MAX_SNAP){ drawStraightRoute(userCoord,destCoord,'Poza siecią – linia prosta'); return; }
+    var path=dijkstra(uN.key,dN.key);
+    if (!path||path.length<1){ drawStraightRoute(userCoord,destCoord,'Sieć nieciągła – linia prosta'); return; }
+    if (uN.dist>3) routeLayers.push(L.polyline([[userLat,userLng],[uN.coord[1],uN.coord[0]]],{color:'#2563eb',weight:2.5,dashArray:'7 9',opacity:0.78}).addTo(map));
+    if (path.length>=2) routeLayers.push(L.polyline(path.map(function(c){return[c[1],c[0]];}),{color:'#2563eb',weight:5,opacity:0.92}).addTo(map));
+    if (dN.dist>3) routeLayers.push(L.polyline([[dN.coord[1],dN.coord[0]],[destCoord[1],destCoord[0]]],{color:'#2563eb',weight:2.5,dashArray:'7 9',opacity:0.78}).addTo(map));
+    var allPts=[[userLat,userLng]].concat(path.map(function(c){return[c[1],c[0]];}),[[destCoord[1],destCoord[0]]]);
+    map.fitBounds(allPts,{padding:[40,40]});
+    var roadDist=path.length>=2?turf.length(turf.lineString(path),{units:'meters'}):0;
+    showToast('🧭 Trasa: ~'+Math.round(uN.dist+roadDist+dN.dist)+' m','ok');
+    btnClearRoute.style.display='flex';
   }
 
-  // Wołane z popupu markera miejsca
-  window.handleNavigate = function(lng, lat) {
-    map.closePopup();
-    navigateTo([lng, lat]);
-  };
-
+  window.handleNavigate = function(lng, lat) { map.closePopup(); navigateTo([lng,lat]); };
   btnClearRoute.addEventListener('click', clearRoute);
 
-  // Ładowanie sieci dróg z pliku GeoJSON
   async function loadRoadNetwork() {
     try {
-      var res    = await fetch('./drogi.json');
-      var geojson = await res.json();
-      roadGraph  = buildRoadGraph(geojson);
-      var nCount = Object.keys(roadGraph.graph).length;
-      console.log('Sieć dróg: ' + nCount + ' węzłów w grafie');
-    } catch(e) {
-      console.warn('Błąd ładowania sieci dróg:', e.message);
-    }
+      var res=await fetch('./drogi.json'), geojson=await res.json();
+      roadGraph=buildRoadGraph(geojson);
+    } catch(e) { console.warn('Sieć dróg:', e.message); }
   }
 
   // ════════════════════════════════════════════════════════════════════
   //  STARTUP
   // ════════════════════════════════════════════════════════════════════
   (async function init() {
-    // Pokaż wskazówkę startową przez 4 sekundy (tylko jeśli nie w trybie dodawania)
-    hintEl.textContent = '📍 Naciśnij „Dodaj miejsce", aby oznaczyć lokalizację';
-    hintEl.classList.add('show');
-    setTimeout(function(){ if (!addMode) hintEl.classList.remove('show'); }, 4000);
-
-    // Załaduj sieć dróg do grafu nawigacyjnego
     await loadRoadNetwork();
-
-    // Utwórz pola lat/lng w Airtable (jeśli nie istnieją)
     await initFields();
-
-    // Załaduj miejsca z Airtable
     await loadPlaces();
+    // Odśwież wyszukiwarkę po załadowaniu
+    if (searchPanel.classList.contains('show')) renderSearchResults(searchInput.value);
   })();
   </script>
 </body>
