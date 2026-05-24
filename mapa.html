@@ -791,6 +791,11 @@
     if (watchId !== null) { navigator.geolocation.clearWatch(watchId); watchId = null; }
     isTracking = false;
     hideGpsRetry();
+    // Usuń marker i okrąg z mapy i wyzeruj referencje,
+    // żeby następne wywołanie updateMarker() mogło poprawnie odtworzyć śledzenie
+    if (gpsMarker)  { map.removeLayer(gpsMarker);  gpsMarker  = null; }
+    if (accCircle)  { map.removeLayer(accCircle);   accCircle  = null; }
+    userLat = null; userLng = null;
     btnCenter.style.display = 'none';
     gpsPill.classList.remove('show');
     setLocateIdle();
