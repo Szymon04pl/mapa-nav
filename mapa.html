@@ -315,6 +315,33 @@
     }
     #modal-save:disabled { opacity:0.5; cursor:not-allowed; }
 
+    /* ─── CHECKBOX ZGODY ─── */
+    #modal-consent {
+      margin-bottom: 16px;
+      padding: 12px 14px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 12px;
+    }
+    .consent-label {
+      display: flex; gap: 10px; align-items: flex-start; cursor: pointer;
+    }
+    .consent-checkbox {
+      flex-shrink: 0; margin-top: 3px;
+      width: 16px; height: 16px; cursor: pointer;
+      accent-color: #f97316;
+    }
+    .consent-text {
+      font-size: 11.5px; color: #94a3b8; line-height: 1.6;
+      user-select: none; -webkit-user-select: none;
+    }
+    .consent-link {
+      color: #f97316; text-decoration: underline; text-underline-offset: 2px;
+    }
+    .consent-link.disabled {
+      pointer-events: none; opacity: 0.5; text-decoration: none;
+    }
+
     /* ─── TOAST ─── */
     #toast {
       position:fixed; bottom:130px; left:50%;
@@ -434,9 +461,21 @@
       <div id="modal-coords"></div>
       <input id="modal-input" type="text" placeholder="Wpisz nazwę miejsca…"
              maxlength="80" autocomplete="off" />
+      <div id="modal-consent">
+        <label class="consent-label">
+          <input type="checkbox" id="modal-checkbox" class="consent-checkbox" />
+          <span class="consent-text">
+            Dodając wpis, pomagasz innym odnaleźć ich bliskich. Dbamy o Twoją prywatność.
+            Twój adres IP jest zatajony (bezpieczny hash) i służy jedynie ochronie przed nadużyciami.
+            Klikając „Wyślij", akceptujesz naszą
+            <a id="consent-policy-link" href="#" target="_blank" rel="noopener noreferrer"
+               class="consent-link">Politykę Prywatności</a>.
+          </span>
+        </label>
+      </div>
       <div id="modal-btns">
         <button id="modal-cancel">Anuluj</button>
-        <button id="modal-save">💾 Zapisz</button>
+        <button id="modal-save">💾 Wyślij</button>
       </div>
     </div>
   </div>
@@ -460,6 +499,18 @@
     // Zmień te wartości, aby ustawić inny domyślny punkt startowy.
     // Format: [szerokość_geograficzna, długość_geograficzna]
     defaultStart: [52.88550, 21.09555],
+
+    // ── Cloudflare Worker — anonimizacja IP (SHA-256) ─────────────────
+    // Wpisz URL swojego wdrożonego workera, np.:
+    //   'https://ip-hasher.twoj-subdomain.workers.dev'
+    // Zostaw pusty string '' jeśli worker nie jest jeszcze wdrożony.
+    workerUrl: '',
+
+    // ── Link do Polityki Prywatności ──────────────────────────────────
+    // Wpisz pełny URL strony z polityką prywatności, np.:
+    //   'https://twoja-strona.pl/polityka-prywatnosci'
+    // Zostaw pusty string '' jeśli strona jeszcze nie istnieje.
+    privacyPolicyUrl: '',
   };
 
   // ╔══════════════════════════════════════════════════════════════════╗
@@ -709,6 +760,11 @@
   function hideModal() {
     modalOv.classList.remove('show');
     pendingLat = null; pendingLng = null;
+    // Reset formularza
+    document.getElementById('modal-checkbox').checked = false;
+    document.getElementById('modal-consent').style.borderColor = '';
+    modalSave.disabled = false;
+    modalSave.textContent = '💾 Wyślij';
     exitAddMode();
   }
 
@@ -719,22 +775,46 @@
     if (e.key === 'Escape') hideModal();
   });
 
+  // Ustaw link do Polityki Prywatności z CFG
+  (function() {
+    var link = document.getElementById('consent-policy-link');
+    if (CFG.privacyPolicyUrl) {
+      link.href = CFG.privacyPolicyUrl;
+    } else {
+      link.classList.add('disabled');
+      link.removeAttribute('href');
+    }
+  })();
+
   modalSave.addEventListener('click', async function() {
-    var name = modalInput.value.trim();
+    var name     = modalInput.value.trim();
+    var checkbox = document.getElementById('modal-checkbox');
+
     if (!name) { modalInput.focus(); return; }
+
+    if (!checkbox.checked) {
+      showToast('⚠ Zaakceptuj Politykę Prywatności', 'err');
+      // Delikatnie podświetl checkbox
+      var consent = document.getElementById('modal-consent');
+      consent.style.borderColor = 'rgba(239,68,68,0.55)';
+      setTimeout(function() { consent.style.borderColor = ''; }, 1800);
+      return;
+    }
+
     modalSave.disabled = true;
     modalSave.innerHTML =
       '<span class="spin"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">' +
       '<path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg></span> Zapisuję…';
     try {
-      var place = await createPlace(name, pendingLat, pendingLng);
+      var ipHash = await getIpHash();
+      var place  = await createPlace(name, pendingLat, pendingLng, ipHash);
       allPlaces.push(place);
       renderPlace(place);
       hideModal();
       showToast('✓ Zapisano: ' + name, 'ok');
     } catch(e) {
       modalSave.disabled = false;
-      modalSave.textContent = '💾 Zapisz';
+      modalSave.textContent = '💾 Wyślij';
       showToast('⚠ Błąd: ' + e.message, 'err');
     }
   });
@@ -858,6 +938,23 @@
   // ════════════════════════════════════════════════════════════════════
   //  AIRTABLE
   // ════════════════════════════════════════════════════════════════════
+  // ── Pobierz zahashowany IP z Cloudflare Workera ──────────────────
+  async function getIpHash() {
+    if (!CFG.workerUrl) {
+      console.warn('[IP] CFG.workerUrl nie jest ustawiony — pomijam hash IP');
+      return '';
+    }
+    try {
+      var res  = await fetch(CFG.workerUrl);
+      var data = await res.json();
+      if (!res.ok || !data.hash) throw new Error('Brak hasha w odpowiedzi');
+      return data.hash;
+    } catch(e) {
+      console.warn('[IP] Błąd workera:', e.message);
+      return 'worker-error';
+    }
+  }
+
   async function initFields() {
     for (var fn of ['lat','lng']) {
       await fetch(AT.metaUrl, {
@@ -865,6 +962,11 @@
         body:JSON.stringify({ name:fn, type:'number', options:{ precision:8 } }),
       }).catch(function(){});
     }
+    // Utwórz pole hasha IP (jeśli nie istnieje; Airtable ignoruje duplikaty)
+    await fetch(AT.metaUrl, {
+      method:'POST', headers:AT.h,
+      body:JSON.stringify({ name:'kto-dodał-nagrobek?', type:'singleLineText' }),
+    }).catch(function(){});
   }
   async function fetchPlaces() {
     var res  = await fetch(AT.url + '?maxRecords=200', { headers: AT.h });
@@ -879,10 +981,12 @@
         lng:  Number(r.fields.lng),
       }; });
   }
-  async function createPlace(name, lat, lng) {
+  async function createPlace(name, lat, lng, ipHash) {
+    var fields = { miejsce: name, lat: lat, lng: lng };
+    if (ipHash) fields['kto-dodał-nagrobek?'] = ipHash;
     var res  = await fetch(AT.url, {
       method:'POST', headers:AT.h,
-      body:JSON.stringify({ records:[{ fields:{ miejsce:name, lat:lat, lng:lng } }] }),
+      body:JSON.stringify({ records:[{ fields: fields }] }),
     });
     var data = await res.json();
     if (!res.ok) throw new Error((data.error && data.error.message) || 'Błąd zapisu');
