@@ -582,6 +582,22 @@
   btnZoomOut.addEventListener('click', function() { map.zoomOut(); });
 
   // ════════════════════════════════════════════════════════════════════
+  //  DEEP LINKING — unikalne linki dla każdej lokacji (?id=RECORD_ID)
+  // ════════════════════════════════════════════════════════════════════
+  function setDeepLink(id) {
+    var newUrl = window.location.pathname + '?id=' + encodeURIComponent(id);
+    window.history.pushState({ placeId: id }, '', newUrl);
+  }
+  function clearDeepLink() {
+    if (window.location.search) {
+      window.history.pushState({}, '', window.location.pathname);
+    }
+  }
+  function getDeepLinkId() {
+    return new URLSearchParams(window.location.search).get('id') || null;
+  }
+
+  // ════════════════════════════════════════════════════════════════════
   //  TOAST
   // ════════════════════════════════════════════════════════════════════
   let toastTimer = null;
@@ -645,10 +661,10 @@
       '<div class="sr-coord">' + place.lat.toFixed(5) + ', ' + place.lng.toFixed(5) + '</div></div>';
 
     el.addEventListener('click', function() {
-      addRecentId(place.id);   // zapamiętaj odwiedziny
       closeSearchPanel();
       map.setView([place.lat, place.lng], 19, { animate: true });
       if (placeMarkers[place.id]) {
+        // openPopup wywoła popupopen → setDeepLink + addRecentId automatycznie
         setTimeout(function() { placeMarkers[place.id].openPopup(); }, 400);
       }
     });
@@ -1010,6 +1026,14 @@
       '<button class="popup-delete" onclick="handleDelete(\'' + place.id + '\')">🗑 Usuń miejsce</button>',
       { maxWidth: 220 }
     );
+    // Deep link — ustaw ?id= gdy popup się otwiera, wyczyść gdy się zamyka
+    marker.on('popupopen', function() {
+      addRecentId(place.id);
+      setDeepLink(place.id);
+    });
+    marker.on('popupclose', function() {
+      clearDeepLink();
+    });
     placeMarkers[place.id] = marker;
   }
 
@@ -1019,6 +1043,7 @@
       if (placeMarkers[id]) { map.removeLayer(placeMarkers[id]); delete placeMarkers[id]; }
       allPlaces = allPlaces.filter(function(p) { return p.id !== id; });
       map.closePopup();
+      clearDeepLink();   // wyczyść URL jeśli usunięte miejsce było w linku
       showToast('✓ Usunięto miejsce', 'ok');
     } catch(e) { showToast('⚠ Błąd: ' + e.message, 'err'); }
   };
@@ -1222,6 +1247,25 @@
     await initFields();
     await loadPlaces();
     if (searchPanel.classList.contains('show')) renderSearchResults(searchInput.value);
+
+    // ── Deep link: otwórz miejsce z URL jeśli ?id= jest obecny ──────
+    var deepId = getDeepLinkId();
+    if (deepId) {
+      var target = allPlaces.find(function(p) { return p.id === deepId; });
+      if (target && placeMarkers[target.id]) {
+        // Wycentruj i otwórz popup — bez animacji żeby było szybkie
+        map.setView([target.lat, target.lng], 19, { animate: false });
+        setTimeout(function() {
+          if (placeMarkers[target.id]) {
+            placeMarkers[target.id].openPopup();
+          }
+        }, 350);
+      } else {
+        // ID w URL nie pasuje do żadnego miejsca
+        clearDeepLink();
+        showToast('⚠ Nie znaleziono miejsca z tego linku', 'err');
+      }
+    }
   })();
   </script>
 </body>
