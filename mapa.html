@@ -960,6 +960,16 @@
         body:JSON.stringify({ name:fn, type:'number', options:{ precision:8 } }),
       }).catch(function(){});
     }
+    // Własne pole ID — niezależne od systemowego record.id Airtable
+    await fetch(AT.metaUrl, {
+      method:'POST', headers:AT.h,
+      body:JSON.stringify({ name:'id', type:'singleLineText' }),
+    }).catch(function(){});
+    // Pole URL z gotowym deep linkiem do lokacji
+    await fetch(AT.metaUrl, {
+      method:'POST', headers:AT.h,
+      body:JSON.stringify({ name:'url', type:'url' }),
+    }).catch(function(){});
     // Utwórz pole hasha IP (jeśli nie istnieje; Airtable ignoruje duplikaty)
     await fetch(AT.metaUrl, {
       method:'POST', headers:AT.h,
@@ -973,38 +983,62 @@
     return (data.records || [])
       .filter(function(r) { return r.fields.lat != null && r.fields.lng != null; })
       .map(function(r) { return {
-        id:   r.id,
-        name: String(r.fields.miejsce || '(bez nazwy)'),
-        lat:  Number(r.fields.lat),
-        lng:  Number(r.fields.lng),
+        // Własne ID z pola fields.id; fallback do systemowego r.id dla starych rekordów
+        id:       r.fields.id || r.id,
+        recordId: r.id,                // Airtable record ID — tylko do operacji API (usuwanie)
+        name:     String(r.fields.miejsce || '(bez nazwy)'),
+        lat:      Number(r.fields.lat),
+        lng:      Number(r.fields.lng),
+        url:      r.fields.url || null,
       }; });
   }
   async function createPlace(name, lat, lng) {
+    // Bazowy URL strony (bez query) — potrzebny do generowania deep linku w workerze
+    var pageBase = window.location.origin + window.location.pathname;
+
     // ── Ścieżka przez Cloudflare Worker (hashuje IP + zapisuje do Airtable) ──
     if (CFG.workerUrl) {
       var res  = await fetch(CFG.workerUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: name, lat: lat, lng: lng }),
+        body: JSON.stringify({ name: name, lat: lat, lng: lng, pageUrl: pageBase }),
       });
       var data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Błąd workera');
-      return { id: data.id, name: data.name, lat: data.lat, lng: data.lng };
+      return {
+        id:       data.id,        // własne ID z pola fields.id
+        recordId: data.recordId,  // systemowy record.id Airtable (do usuwania)
+        url:      data.url || null,
+        name:     data.name,
+        lat:      data.lat,
+        lng:      data.lng,
+      };
     }
 
     // ── Fallback: bezpośrednio do Airtable gdy worker nie jest skonfigurowany ──
     console.warn('[AT] CFG.workerUrl pusty — zapis bez hasha IP');
+    // Generuj własne ID po stronie klienta (fallback)
+    var customId = 'local-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7);
+    var customUrl = pageBase + '?id=' + customId;
     var res2  = await fetch(AT.url, {
       method:'POST', headers:AT.h,
-      body:JSON.stringify({ records:[{ fields:{ miejsce:name, lat:lat, lng:lng } }] }),
+      body:JSON.stringify({ records:[{ fields:{ miejsce:name, lat:lat, lng:lng, id:customId, url:customUrl } }] }),
     });
     var data2 = await res2.json();
     if (!res2.ok) throw new Error((data2.error && data2.error.message) || 'Błąd zapisu');
     var r = data2.records[0];
-    return { id:r.id, name:r.fields.miejsce||name, lat:r.fields.lat||lat, lng:r.fields.lng||lng };
+    return {
+      id:       r.fields.id || r.id,
+      recordId: r.id,
+      url:      r.fields.url || customUrl,
+      name:     r.fields.miejsce || name,
+      lat:      r.fields.lat || lat,
+      lng:      r.fields.lng || lng,
+    };
   }
-  async function destroyPlace(id) {
-    var res = await fetch(AT.url + '/' + id, { method:'DELETE', headers:AT.h });
+  // Przyjmuje recordId (systemowy Airtable ID), nie własne pole id
+  async function destroyPlace(recordId) {
+    var res = await fetch(AT.url + '/' + recordId, { method:'DELETE', headers:AT.h });
     if (!res.ok) throw new Error('Błąd usuwania');
   }
 
@@ -1038,8 +1072,11 @@
   }
 
   window.handleDelete = async function(id) {
+    // id = własne pole fields.id; szukamy recordId (Airtable) do faktycznego usunięcia
+    var place = allPlaces.find(function(p) { return p.id === id; });
+    if (!place) { showToast('⚠ Nie znaleziono miejsca', 'err'); return; }
     try {
-      await destroyPlace(id);
+      await destroyPlace(place.recordId);
       if (placeMarkers[id]) { map.removeLayer(placeMarkers[id]); delete placeMarkers[id]; }
       allPlaces = allPlaces.filter(function(p) { return p.id !== id; });
       map.closePopup();
