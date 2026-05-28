@@ -6,11 +6,81 @@
         maximum-scale=1.0, user-scalable=no" />
   <title>Mapa</title>
 
-  <!-- LEAFLET CDN — zastąp lokalnymi plikami dla trybu offline -->
+  <!--
+  ╔══════════════════════════════════════════════════════════════════════╗
+  ║         TRYB OFFLINE — jak zastąpić CDN lokalnymi plikami           ║
+  ╠══════════════════════════════════════════════════════════════════════╣
+  ║                                                                      ║
+  ║  Aplikacja korzysta z 2 bibliotek ładowanych przez internet (CDN).  ║
+  ║  Poniżej znajdziesz instrukcję jak je pobrać i uruchamiać lokalnie. ║
+  ║                                                                      ║
+  ║  ── KROK 1: Pobierz pliki ──────────────────────────────────────    ║
+  ║                                                                      ║
+  ║  [1] Leaflet CSS (styl mapy)                                         ║
+  ║      URL: https://unpkg.com/leaflet@1.9.4/dist/leaflet.css          ║
+  ║      Zapisz jako: public/leaflet.css   (obok mapa.html)             ║
+  ║                                                                      ║
+  ║  [2] Leaflet JS (silnik mapy interaktywnej)                          ║
+  ║      URL: https://unpkg.com/leaflet@1.9.4/dist/leaflet.js           ║
+  ║      Zapisz jako: public/leaflet.js    (obok mapa.html)             ║
+  ║                                                                      ║
+  ║  [3] Turf.js (obliczenia geometryczne: odległości, trasy)           ║
+  ║      URL: https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js     ║
+  ║      Zapisz jako: public/turf.min.js   (obok mapa.html)            ║
+  ║                                                                      ║
+  ║  Przez terminal (z katalogu public/):                                ║
+  ║    curl -L -o leaflet.css  https://unpkg.com/leaflet@1.9.4/dist/leaflet.css
+  ║    curl -L -o leaflet.js   https://unpkg.com/leaflet@1.9.4/dist/leaflet.js
+  ║    curl -L -o turf.min.js  https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js
+  ║                                                                      ║
+  ║  ── KROK 2: Struktura folderów (wszystko w jednym miejscu) ──────    ║
+  ║                                                                      ║
+  ║  public/                                                             ║
+  ║  ├── mapa.html          ← ten plik                                  ║
+  ║  ├── mapa.jpg           ← obraz mapy (już lokalny ✓)               ║
+  ║  ├── drogi.json         ← sieć dróg (już lokalny ✓)                ║
+  ║  ├── leaflet.css        ← pobierz (krok 1)                         ║
+  ║  ├── leaflet.js         ← pobierz (krok 1)                         ║
+  ║  └── turf.min.js        ← pobierz (krok 1)                         ║
+  ║                                                                      ║
+  ║  ── KROK 3: Zamień tagi CDN na lokalne ────────────────────────    ║
+  ║                                                                      ║
+  ║  Usuń 3 linie CDN poniżej i zastąp je:                              ║
+  ║                                                                      ║
+  ║    <link rel="stylesheet" href="leaflet.css" />                      ║
+  ║    <script src="leaflet.js"></script>                                ║
+  ║    <script src="turf.min.js"></script>                           ║
+  ║                                                                      ║
+  ║  ── CO NADAL WYMAGA INTERNETU (i nie da się tego zmienić) ──────    ║
+  ║                                                                      ║
+  ║  • Airtable API — synchronizacja danych nagrobków                   ║
+  ║  • Cloudflare Worker — anonimizacja IP przy dodawaniu miejsca       ║
+  ║                                                                      ║
+  ║  Bez internetu mapa wyświetli się poprawnie (lokalny obraz),        ║
+  ║  nawigacja zadziała (lokalny drogi.json), ale dane nagrobków        ║
+  ║  nie zostaną załadowane/zapisane.                                    ║
+  ║                                                                      ║
+  ║  Pełna instrukcja offline: public/OFFLINE-SETUP.md                  ║
+  ╚══════════════════════════════════════════════════════════════════════╝
+  -->
+
+  <!-- ══ [1/3] LEAFLET CSS — silnik wizualny mapy ══════════════════════
+       AKTUALNIE: CDN (wymaga internetu)
+       OFFLINE:   zmień href na "leaflet.css"
+       ================================================================ -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+  <!-- ══ [2/3] LEAFLET JS — interaktywna mapa, markery, popupy ════════
+       AKTUALNIE: CDN (wymaga internetu)
+       OFFLINE:   zmień src na "leaflet.js"
+       ================================================================ -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <!-- TURF.JS CDN — obliczenia geometryczne -->
-  <script src="turf.min.js"></script>
+
+  <!-- ══ [3/3] TURF.JS — geometria: odległości, trasy, snap ══════════
+       AKTUALNIE: CDN (wymaga internetu)
+       OFFLINE:   zmień src na "turf.min.js"
+       ================================================================ -->
+  <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
 
   <style>
     *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
@@ -652,15 +722,10 @@
   };
 
   // ╔══════════════════════════════════════════════════════════════════╗
-  // ║  KONFIGURACJA AIRTABLE                                           ║
+  // ║  KONFIGURACJA GOOGLE SHEETS (Apps Script Web App)                ║
   // ╚══════════════════════════════════════════════════════════════════╝
-  const AT = {
-    token:   'patSrMCXkJN1MaTQe.4b3c92f706dd2013df5b7bce0cf39b3efb4da1dce03356057d606d546a797ee3',
-    baseId:  'app8cFBUKVd2lQpJt',
-    tableId: 'tblX73vtwG5u14TNy',
-    get url()     { return 'https://api.airtable.com/v0/' + this.baseId + '/' + this.tableId; },
-    get metaUrl() { return 'https://api.airtable.com/v0/meta/bases/' + this.baseId + '/tables/' + this.tableId + '/fields'; },
-    get h()       { return { 'Authorization': 'Bearer ' + this.token, 'Content-Type': 'application/json' }; },
+  const GS = {
+    scriptUrl: 'https://script.google.com/macros/s/AKfycbwyu_Vf213RAdih-xgpOB_T72y3W7me7VfuzXOAnZ8mF0jCUWXAn73TIR7zV-jd1K7r/exec',
   };
 
   // ══════════════════════════════════════════════════════════════════
@@ -1144,43 +1209,21 @@
   // ════════════════════════════════════════════════════════════════════
   //  AIRTABLE
   // ════════════════════════════════════════════════════════════════════
-  async function initFields() {
-    for (var fn of ['lat','lng']) {
-      await fetch(AT.metaUrl, {
-        method:'POST', headers:AT.h,
-        body:JSON.stringify({ name:fn, type:'number', options:{ precision:8 } }),
-      }).catch(function(){});
-    }
-    // Własne pole ID — niezależne od systemowego record.id Airtable
-    await fetch(AT.metaUrl, {
-      method:'POST', headers:AT.h,
-      body:JSON.stringify({ name:'id', type:'singleLineText' }),
-    }).catch(function(){});
-    // Pole URL z gotowym deep linkiem do lokacji
-    await fetch(AT.metaUrl, {
-      method:'POST', headers:AT.h,
-      body:JSON.stringify({ name:'url', type:'url' }),
-    }).catch(function(){});
-    // Utwórz pole hasha IP (jeśli nie istnieje; Airtable ignoruje duplikaty)
-    await fetch(AT.metaUrl, {
-      method:'POST', headers:AT.h,
-      body:JSON.stringify({ name:'kto-dodał-nagrobek?', type:'singleLineText' }),
-    }).catch(function(){});
-  }
+  // Google Sheets nie wymaga initFields — nagłówki definiujesz ręcznie w arkuszu
+  async function initFields() { /* noop dla Google Sheets */ }
+
   async function fetchPlaces() {
-    var res  = await fetch(AT.url + '?maxRecords=200', { headers: AT.h });
+    var res  = await fetch(GS.scriptUrl);
     var data = await res.json();
-    if (!res.ok) throw new Error((data.error && data.error.message) || 'Błąd Airtable');
-    return (data.records || [])
-      .filter(function(r) { return r.fields.lat != null && r.fields.lng != null; })
+    if (!res.ok) throw new Error('Błąd Google Sheets');
+    return data
+      .filter(function(r) { return r.lat != null && r.lng != null && r.lat !== '' && r.lng !== ''; })
       .map(function(r) { return {
-        // Własne ID z pola fields.id; fallback do systemowego r.id dla starych rekordów
-        id:       r.fields.id || r.id,
-        recordId: r.id,                // Airtable record ID — tylko do operacji API (usuwanie)
-        name:     String(r.fields.miejsce || '(bez nazwy)'),
-        lat:      Number(r.fields.lat),
-        lng:      Number(r.fields.lng),
-        url:      r.fields.url || null,
+        id:   String(r.id || ''),
+        name: String(r.miejsce || '(bez nazwy)'),
+        lat:  Number(r.lat),
+        lng:  Number(r.lng),
+        url:  r.url || null,
       }; });
   }
   async function createPlace(name, lat, lng) {
@@ -1197,40 +1240,42 @@
       var data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Błąd workera');
       return {
-        id:       data.id,        // własne ID z pola fields.id
-        recordId: data.recordId,  // systemowy record.id Airtable (do usuwania)
-        url:      data.url || null,
-        name:     data.name,
-        lat:      data.lat,
-        lng:      data.lng,
+        id:   data.id,
+        url:  data.url || null,
+        name: data.name,
+        lat:  data.lat,
+        lng:  data.lng,
       };
     }
 
-    // ── Fallback: bezpośrednio do Airtable gdy worker nie jest skonfigurowany ──
-    console.warn('[AT] CFG.workerUrl pusty — zapis bez hasha IP');
-    // Generuj własne ID po stronie klienta (fallback)
+    // ── Fallback: bezpośrednio do Google Sheets gdy worker nie jest skonfigurowany ──
+    console.warn('[GS] CFG.workerUrl pusty — zapis bez hasha IP');
     var customId = 'local-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7);
     var customUrl = pageBase + '?id=' + customId;
-    var res2  = await fetch(AT.url, {
-      method:'POST', headers:AT.h,
-      body:JSON.stringify({ records:[{ fields:{ miejsce:name, lat:lat, lng:lng, id:customId, url:customUrl } }] }),
+    var res2  = await fetch(GS.scriptUrl, {
+      method:'POST',
+      headers:{ 'Content-Type': 'application/json' },
+      body:JSON.stringify({ action:'add', id:customId, miejsce:name, lat:lat, lng:lng, url:customUrl, hash_ip:'' }),
     });
     var data2 = await res2.json();
-    if (!res2.ok) throw new Error((data2.error && data2.error.message) || 'Błąd zapisu');
-    var r = data2.records[0];
+    if (data2.status === 'error') throw new Error(data2.message || 'Błąd zapisu');
     return {
-      id:       r.fields.id || r.id,
-      recordId: r.id,
-      url:      r.fields.url || customUrl,
-      name:     r.fields.miejsce || name,
-      lat:      r.fields.lat || lat,
-      lng:      r.fields.lng || lng,
+      id:   customId,
+      url:  customUrl,
+      name: name,
+      lat:  lat,
+      lng:  lng,
     };
   }
-  // Przyjmuje recordId (systemowy Airtable ID), nie własne pole id
-  async function destroyPlace(recordId) {
-    var res = await fetch(AT.url + '/' + recordId, { method:'DELETE', headers:AT.h });
-    if (!res.ok) throw new Error('Błąd usuwania');
+  // Usuwa wiersz z Google Sheets po polu id
+  async function destroyPlace(placeId) {
+    var res = await fetch(GS.scriptUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'delete', id: placeId }),
+    });
+    var data = await res.json();
+    if (data.status === 'error') throw new Error(data.message || 'Błąd usuwania');
   }
 
   // ════════════════════════════════════════════════════════════════════
@@ -1263,11 +1308,10 @@
   }
 
   window.handleDelete = async function(id) {
-    // id = własne pole fields.id; szukamy recordId (Airtable) do faktycznego usunięcia
     var place = allPlaces.find(function(p) { return p.id === id; });
     if (!place) { showToast('⚠ Nie znaleziono miejsca', 'err'); return; }
     try {
-      await destroyPlace(place.recordId);
+      await destroyPlace(place.id);
       if (placeMarkers[id]) { map.removeLayer(placeMarkers[id]); delete placeMarkers[id]; }
       allPlaces = allPlaces.filter(function(p) { return p.id !== id; });
       map.closePopup();
