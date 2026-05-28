@@ -1217,14 +1217,28 @@
     var data = await res.json();
     if (!res.ok) throw new Error('Błąd Google Sheets');
     return data
-      .filter(function(r) { return r.lat != null && r.lng != null && r.lat !== '' && r.lng !== ''; })
-      .map(function(r) { return {
-        id:   String(r.id || ''),
-        name: String(r.miejsce || '(bez nazwy)'),
-        lat:  Number(r.lat),
-        lng:  Number(r.lng),
-        url:  r.url || null,
-      }; });
+      .filter(function(r) {
+        // Nagłówki w arkuszu: Zadanie=id, Stan=miejsce, Właściciel=lat, Etap=lng, Termin=url, Notatki=hash_ip
+        var rawLat = r['Właściciel'] || r['lat'] || '';
+        var rawLng = r['Etap'] || r['lng'] || '';
+        return rawLat !== '' && rawLng !== '';
+      })
+      .map(function(r) {
+        // Współrzędne mogą mieć przecinek (polski locale) — zamieniamy na kropkę
+        var rawLat = String(r['Właściciel'] || r['lat'] || '').replace(',', '.');
+        var rawLng = String(r['Etap'] || r['lng'] || '').replace(',', '.');
+        var lat = Number(rawLat);
+        var lng = Number(rawLng);
+        if (isNaN(lat) || isNaN(lng) || lat === 0 || lng === 0) return null;
+        return {
+          id:   String(r['Zadanie'] || r['id'] || ''),
+          name: String(r['Stan'] || r['miejsce'] || '(bez nazwy)'),
+          lat:  lat,
+          lng:  lng,
+          url:  r['Termin'] || r['url'] || null,
+        };
+      })
+      .filter(Boolean);
   }
   async function createPlace(name, lat, lng) {
     // Bazowy URL strony (bez query) — potrzebny do generowania deep linku w workerze
