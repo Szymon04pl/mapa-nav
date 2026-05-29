@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SHA-256 Cracker</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  :root{--bg:#fff;--fg:#1e293b;--muted:#f1f5f9;--muted-fg:#64748b;--border:#e2e8f0;--primary:#1e293b;--primary-fg:#f8fafc;--destructive:#ef4444;--destructive-fg:#fff;--green:#16a34a;--radius:0.5rem;--font:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;--mono:'Courier New',monospace}
+  body{font-family:var(--font);background:var(--bg);color:var(--fg);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:1rem;-webkit-font-smoothing:antialiased}
+  .container{width:100%;max-width:480px}
+  .header{text-align:center;margin-bottom:1.5rem}
+  .icon-wrap{display:inline-flex;align-items:center;justify-content:center;width:56px;height:56px;border-radius:1rem;background:color-mix(in srgb,var(--primary) 10%,transparent);margin-bottom:.5rem}
+  .icon-wrap svg{width:28px;height:28px;color:var(--primary)}
+  .header h1{font-size:1.5rem;font-weight:700;letter-spacing:-.025em}
+  .header p{font-size:.875rem;color:var(--muted-fg);margin-top:.25rem}
+  .card{border:1px solid var(--border);border-radius:var(--radius);background:var(--bg);box-shadow:0 1px 3px rgba(0,0,0,.08);margin-bottom:1.5rem}
+  .card-header{padding:1.25rem 1.5rem .75rem}
+  .card-title{font-size:.9375rem;font-weight:600}
+  .card-desc{font-size:.8125rem;color:var(--muted-fg);margin-top:.125rem;font-family:var(--mono)}
+  .card-content{padding:0 1.5rem 1.5rem}
+  .field{margin-bottom:1rem}.field:last-child{margin-bottom:0}
+  label{display:block;font-size:.8125rem;font-weight:500;margin-bottom:.375rem}
+  input[type="text"],input[type="number"]{width:100%;padding:.5rem .75rem;font-size:.875rem;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg);color:var(--fg);outline:none;transition:border-color .15s;font-family:inherit}
+  input:focus{border-color:var(--primary);box-shadow:0 0 0 2px color-mix(in srgb,var(--primary) 15%,transparent)}
+  .mono{font-family:var(--mono);font-size:.75rem}
+  input:disabled{opacity:.5;cursor:not-allowed}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:.75rem}
+  .btn{width:100%;padding:.625rem 1rem;font-size:.875rem;font-weight:500;border:none;border-radius:var(--radius);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:.5rem;transition:opacity .15s;font-family:inherit}
+  .btn:disabled{opacity:.5;cursor:not-allowed}
+  .btn-primary{background:var(--primary);color:var(--primary-fg)}
+  .btn-primary:hover:not(:disabled){opacity:.9}
+  .btn-destructive{background:var(--destructive);color:var(--destructive-fg)}
+  .btn-destructive:hover{opacity:.9}
+  .btn svg{width:16px;height:16px}
+  .progress-wrap{width:100%;height:8px;background:var(--muted);border-radius:999px;overflow:hidden}
+  .progress-bar{height:100%;background:var(--primary);border-radius:999px;transition:width .3s}
+  .stats{display:grid;grid-template-columns:1fr 1fr;gap:.25rem 1rem;font-size:.75rem;color:var(--muted-fg)}
+  .stats .val{font-family:var(--mono);color:var(--fg)}
+  .stats .right{text-align:right}
+  .badge{display:inline-block;font-family:var(--mono);font-size:.6875rem;background:var(--muted);padding:.125rem .5rem;border-radius:var(--radius)}
+  .result-ok{display:flex;align-items:center;gap:.5rem;color:var(--green);font-weight:600}
+  .result-ok svg,.result-fail svg{width:20px;height:20px}
+  .result-fail{display:flex;align-items:center;gap:.5rem;color:var(--destructive);font-weight:600}
+  .ip-box{padding:.75rem;border-radius:var(--radius);background:var(--muted);margin-top:.75rem}
+  .ip-box .lbl{font-size:.75rem;color:var(--muted-fg)}
+  .ip-box .ip{font-family:var(--mono);font-size:1.125rem;font-weight:700;margin-top:.125rem;word-break:break-all}
+  .sub-box{padding:.75rem;border-radius:var(--radius);background:color-mix(in srgb,var(--muted) 50%,transparent);margin-top:.5rem}
+  .sub-box .lbl{font-size:.75rem;color:var(--muted-fg)}.sub-box .val{font-family:var(--mono);font-size:.75rem;margin-top:.125rem;word-break:break-all}
+  .space-y>*+*{margin-top:1rem}
+  .estimate{text-align:center;font-size:.75rem;color:var(--muted-fg);margin-top:.75rem}
+  .estimate b{font-family:var(--mono);color:var(--fg);font-weight:500}
+  .advanced-toggle{display:flex;align-items:center;gap:.5rem;cursor:pointer;font-size:.8125rem;color:var(--muted-fg);user-select:none;transition:color .15s;border:none;background:none;padding:0;font-family:inherit}
+  .advanced-toggle:hover{color:var(--fg)}
+  .advanced-toggle svg{width:16px;height:16px}
+  .advanced-box{padding:.75rem;border-radius:var(--radius);background:color-mix(in srgb,var(--muted) 50%,transparent);border:1px solid var(--border);margin-top:.5rem}
+  .radio-row{display:flex;align-items:center;gap:.5rem;font-size:.75rem;margin-bottom:.375rem;cursor:pointer}.radio-row:last-child{margin-bottom:0}.radio-row input{width:auto;margin:0}
+  .hidden{display:none}
+  @keyframes spin{to{transform:rotate(360deg)}}.spin{animation:spin 1s linear infinite}
+
+  /* Checkbox groups */
+  .char-groups{display:flex;flex-direction:column;gap:.5rem}
+  .char-group{display:flex;align-items:flex-start;gap:.625rem;cursor:pointer}
+  .char-group input[type="checkbox"]{width:16px;height:16px;margin-top:2px;accent-color:var(--primary);cursor:pointer;flex-shrink:0}
+  .char-group .grp-label{font-size:.8125rem;font-weight:500;line-height:1.3}
+  .char-group .grp-desc{font-size:.75rem;color:var(--muted-fg);line-height:1.3}
+  .show-more-btn{display:flex;align-items:center;gap:.25rem;font-size:.75rem;color:var(--muted-fg);cursor:pointer;border:none;background:none;padding:0;font-family:inherit;transition:color .15s;margin-top:.25rem}
+  .show-more-btn:hover{color:var(--fg)}
+  .show-more-btn svg{width:14px;height:14px}
+  .charset-summary{padding:.75rem;border-radius:var(--radius);background:color-mix(in srgb,var(--muted) 50%,transparent);border:1px solid var(--border)}
+  .charset-summary .cs-header{display:flex;align-items:center;justify-content:between;font-size:.75rem}
+  .charset-summary .cs-header .cs-label{color:var(--muted-fg);flex:1}
+  .charset-summary .cs-chars{font-family:var(--mono);font-size:.75rem;color:var(--muted-fg);word-break:break-all;line-height:1.6;margin-top:.375rem}
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <div class="icon-wrap"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/></svg></div>
+    <h1>SHA-256 Cracker</h1>
+    <p>Brute-force SHA-256 — odgadnij dowolny tekst z hasha</p>
+  </div>
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">Parametry</div>
+      <div class="card-desc" id="formulaDisplay">SHA-256( SALT1 + ??? + SALT2 )</div>
+    </div>
+    <div class="card-content space-y">
+      <div class="field"><label for="hash">Hash SHA-256</label><input type="text" id="hash" class="mono" placeholder="Wklej hash do złamania..."></div>
+      <div class="row">
+        <div class="field"><label for="salt1">SALT1</label><input type="text" id="salt1" placeholder="Opcjonalne"></div>
+        <div class="field"><label for="salt2">SALT2</label><input type="text" id="salt2" placeholder="Opcjonalne"></div>
+      </div>
+
+      <!-- Character group checkboxes -->
+      <div class="field">
+        <label>Znaki do przeszukania</label>
+        <div class="char-groups" id="charGroups"></div>
+        <button type="button" class="show-more-btn" id="showMoreBtn" onclick="toggleShowMore()">
+          <svg id="showMoreIcon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+          <span id="showMoreText"></span>
+        </button>
+      </div>
+
+      <!-- Custom chars -->
+      <div class="field">
+        <label for="customChars">Dodaj własne znaki</label>
+        <input type="text" id="customChars" class="mono" placeholder="Wpisz dodatkowe znaki, np. €£¥@_">
+      </div>
+
+      <!-- Exclude chars -->
+      <div class="field">
+        <label for="excludeChars">Wyklucz znaki</label>
+        <input type="text" id="excludeChars" class="mono" placeholder="Te znaki zostaną pominięte, np. lO0I1">
+      </div>
+
+      <!-- Active charset summary -->
+      <div class="charset-summary" id="charsetSummary">
+        <div class="cs-header">
+          <span class="cs-label">Aktywne znaki:</span>
+          <span class="badge" id="charsetCount">0</span>
+        </div>
+        <div class="cs-chars" id="charsetPreview"></div>
+      </div>
+
+      <div class="row">
+        <div class="field"><label for="minLen">Min. długość</label><input type="number" id="minLen" value="1" min="1" max="20"></div>
+        <div class="field"><label for="maxLen">Max. długość</label><input type="number" id="maxLen" value="6" min="1" max="20"></div>
+      </div>
+      <button type="button" class="advanced-toggle" onclick="toggleAdvanced()">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 7h-9"/><path d="M14 17H5"/><circle cx="17" cy="17" r="3"/><circle cx="7" cy="7" r="3"/></svg>
+        Zaawansowane
+      </button>
+      <div class="advanced-box hidden" id="advancedBox">
+        <label style="font-size:.75rem;color:var(--muted-fg);margin-bottom:.5rem">Pozycja soli</label>
+        <label class="radio-row"><input type="radio" name="saltPos" value="wrap" checked onchange="updateFormula()"> SALT1 + tekst + SALT2 (owijanie)</label>
+        <label class="radio-row"><input type="radio" name="saltPos" value="prefix" onchange="updateFormula()"> SALT1 + SALT2 + tekst (prefix)</label>
+        <label class="radio-row"><input type="radio" name="saltPos" value="suffix" onchange="updateFormula()"> tekst + SALT1 + SALT2 (suffix)</label>
+      </div>
+      <div class="estimate" id="estimate"></div>
+      <button class="btn btn-primary" id="btnStart" onclick="startSearch()">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+        Rozpocznij brute-force
+      </button>
+      <button class="btn btn-destructive hidden" id="btnStop" onclick="stopSearch()">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="5" y="5" rx="1"/></svg>
+        Zatrzymaj
+      </button>
+    </div>
+  </div>
+  <div class="card hidden" id="resultsCard">
+    <div class="card-content space-y" style="padding-top:1.5rem" id="resultsContent"></div>
+  </div>
+</div>
+<script>
+// ── Character groups (same as React app) ──
+const CHAR_GROUPS = [
+  { id: "lower", label: "Małe litery", desc: "a-z", chars: "abcdefghijklmnopqrstuvwxyz" },
+  { id: "upper", label: "Duże litery", desc: "A-Z", chars: "ABCDEFGHIJKLMNOPQRSTUVWXYZ" },
+  { id: "digits", label: "Cyfry", desc: "0-9", chars: "0123456789" },
+  { id: "space", label: "Spacja", desc: '" "', chars: " " },
+  { id: "punct_basic", label: "Interpunkcja podstawowa", desc: '. , ; : ! ? \' "', chars: '.,;:!?\'"' },
+  { id: "brackets", label: "Nawiasy", desc: "( ) [ ] { } < >", chars: "()[]{}<>" },
+  { id: "math", label: "Znaki matematyczne", desc: "+ - * / = % ^", chars: "+-*/=%^" },
+  { id: "symbols", label: "Symbole specjalne", desc: "@ # $ & _ | \\ ~ `", chars: "@#$&_|\\~`" },
+  { id: "polish", label: "Polskie znaki", desc: "ą ć ę ł ń ó ś ź ż (małe + duże)", chars: "ąćęłńóśźżĄĆĘŁŃÓŚŹŻ" },
+  { id: "hex", label: "Hex (a-f)", desc: "a b c d e f (małe)", chars: "abcdef" },
+  { id: "ascii_all", label: "Pełne ASCII drukowane", desc: "Wszystkie 95 znaków ASCII 32-126", chars: (function(){let s="";for(let i=32;i<=126;i++)s+=String.fromCharCode(i);return s})() },
+  { id: "extended", label: "Extended ASCII (128-255)", desc: "Znaki rozszerzone — 128 dodatkowych bajtów", chars: (function(){let s="";for(let i=128;i<=255;i++)s+=String.fromCharCode(i);return s})() },
+];
+
+const INITIAL_VISIBLE = 6;
+let showAll = false;
+const selectedGroups = new Set(["lower", "digits"]);
+
+// Build checkbox UI
+function renderGroups() {
+  const container = document.getElementById("charGroups");
+  container.innerHTML = "";
+  const visible = showAll ? CHAR_GROUPS : CHAR_GROUPS.slice(0, INITIAL_VISIBLE);
+  visible.forEach(g => {
+    const row = document.createElement("label");
+    row.className = "char-group";
+    row.innerHTML = `<input type="checkbox" data-group="${g.id}" ${selectedGroups.has(g.id) ? "checked" : ""}>
+      <div><span class="grp-label">${g.label}</span><br><span class="grp-desc">${g.desc}</span></div>`;
+    row.querySelector("input").addEventListener("change", function() {
+      if (this.checked) selectedGroups.add(g.id); else selectedGroups.delete(g.id);
+      updateCharset();
+    });
+    container.appendChild(row);
+  });
+  const remaining = CHAR_GROUPS.length - INITIAL_VISIBLE;
+  const btn = document.getElementById("showMoreBtn");
+  if (remaining > 0) {
+    btn.classList.remove("hidden");
+    document.getElementById("showMoreText").textContent = showAll ? "Zwiń" : `Pokaż więcej (${remaining})`;
+    document.getElementById("showMoreIcon").style.transform = showAll ? "rotate(180deg)" : "";
+  } else {
+    btn.classList.add("hidden");
+  }
+}
+
+function toggleShowMore() { showAll = !showAll; renderGroups(); }
+
+// Build charset from selections
+function getCharset() {
+  const excludeSet = new Set(document.getElementById("excludeChars").value.split(""));
+  const allChars = new Set();
+  for (const g of CHAR_GROUPS) {
+    if (selectedGroups.has(g.id)) for (const c of g.chars) allChars.add(c);
+  }
+  for (const c of document.getElementById("customChars").value) allChars.add(c);
+  for (const c of excludeSet) allChars.delete(c);
+  return Array.from(allChars).join("");
+}
+
+function updateCharset() {
+  const cs = getCharset();
+  document.getElementById("charsetCount").textContent = cs.length;
+  const preview = document.getElementById("charsetPreview");
+  if (cs.length === 0) {
+    preview.textContent = "";
+  } else if (cs.length <= 100) {
+    preview.textContent = cs.split("").map(c => c === " " ? "␣" : c).join("");
+  } else {
+    preview.innerHTML = cs.slice(0, 60).split("").map(c => c === " " ? "␣" : c).join("") +
+      ` <span style="color:var(--fg);font-weight:500">…i ${cs.length - 60} więcej</span>`;
+  }
+  updateEstimate();
+}
+
+function countCombs(cLen, mn, mx) { let t = 0; for (let l = mn; l <= mx; l++) t += Math.pow(cLen, l); return t; }
+
+function updateEstimate() {
+  const cs = getCharset();
+  const mn = Math.max(1, +document.getElementById("minLen").value);
+  const mx = Math.max(1, +document.getElementById("maxLen").value);
+  const el = document.getElementById("estimate");
+  if (cs.length === 0) { el.textContent = "Zaznacz przynajmniej jedną grupę znaków"; return; }
+  el.innerHTML = `${cs.length} znaków × długość ${mn}–${mx} = <b>${countCombs(cs.length, mn, mx).toLocaleString("pl")}</b> kombinacji`;
+}
+
+function getSaltPos() { return document.querySelector('input[name="saltPos"]:checked').value; }
+function buildInput(candidate) {
+  const s1 = document.getElementById("salt1").value, s2 = document.getElementById("salt2").value, p = getSaltPos();
+  if (p === "prefix") return s1 + s2 + candidate; if (p === "suffix") return candidate + s1 + s2; return s1 + candidate + s2;
+}
+function updateFormula() {
+  const p = getSaltPos(), el = document.getElementById("formulaDisplay");
+  if (p === "prefix") el.textContent = "SHA-256( SALT1 + SALT2 + ??? )";
+  else if (p === "suffix") el.textContent = "SHA-256( ??? + SALT1 + SALT2 )";
+  else el.textContent = "SHA-256( SALT1 + ??? + SALT2 )";
+}
+function toggleAdvanced() { document.getElementById("advancedBox").classList.toggle("hidden"); }
+
+// Init
+renderGroups();
+document.getElementById("customChars").addEventListener("input", updateCharset);
+document.getElementById("excludeChars").addEventListener("input", updateCharset);
+document.getElementById("minLen").addEventListener("input", updateEstimate);
+document.getElementById("maxLen").addEventListener("input", updateEstimate);
+updateCharset();
+
+async function sha256(text) { const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text)); return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join(""); }
+function* generateCombinations(charset, minLen, maxLen) {
+  const chars = charset.split(""), base = chars.length;
+  for (let len = minLen; len <= maxLen; len++) { const total = Math.pow(base, len); for (let i = 0; i < total; i++) { let combo = "", num = i; for (let pos = 0; pos < len; pos++) { combo = chars[num % base] + combo; num = Math.floor(num / base); } yield combo; } }
+}
+let cancelled = false;
+function stopSearch() { cancelled = true; }
+function setDisabled(v) {
+  ["hash", "salt1", "salt2", "customChars", "excludeChars", "minLen", "maxLen"].forEach(id => { document.getElementById(id).disabled = v; });
+  document.querySelectorAll('#charGroups input[type="checkbox"]').forEach(cb => cb.disabled = v);
+  document.querySelectorAll('input[name="saltPos"]').forEach(r => r.disabled = v);
+}
+
+async function startSearch() {
+  const target = document.getElementById("hash").value.trim().toLowerCase(); if (!target) return;
+  const charset = getCharset(); if (!charset) return;
+  const mn = Math.max(1, +document.getElementById("minLen").value), mx = Math.max(1, +document.getElementById("maxLen").value);
+  cancelled = false; setDisabled(true);
+  document.getElementById("btnStart").classList.add("hidden"); document.getElementById("btnStop").classList.remove("hidden");
+  const total = countCombs(charset.length, mn, mx);
+  const rc = document.getElementById("resultsCard"), rco = document.getElementById("resultsContent"); rc.classList.remove("hidden");
+
+  let timerInterval = null;
+  let elapsedDisplay = document.createElement("span");
+
+  function fmtTime(s){if(s<60)return s.toFixed(1)+"s";const m=Math.floor(s/60),sec=s%60;if(m<60)return m+"m "+sec.toFixed(1)+"s";const h=Math.floor(m/60);return h+"h "+(m%60)+"m "+Math.floor(sec)+"s";}
+
+  function renderRunning(checked, speed, pct, curLen, elapsed) {
+    rco.innerHTML = `<div style="display:flex;align-items:center;gap:.5rem;font-size:.875rem;color:var(--muted-fg)"><svg class="spin" style="width:16px;height:16px" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>Przeszukiwanie kombinacji...</div>
+    <div class="progress-wrap"><div class="progress-bar" style="width:${pct}%"></div></div>
+    <div class="stats"><div>Sprawdzono: <span class="val">${checked.toLocaleString("pl")}</span></div><div class="right">Łącznie: <span class="val">${total.toLocaleString("pl")}</span></div><div>Prędkość: <span class="val">${speed.toLocaleString("pl")} hash/s</span></div><div class="right">Postęp: <span class="val">${pct.toFixed(1)}%</span></div><div style="grid-column:span 2">Czas: <span class="val">${fmtTime(elapsed)}</span></div></div>
+    <div style="font-size:.75rem;color:var(--muted-fg)">Aktualna długość: <span class="badge">${curLen} znaków</span></div>`;
+  }
+  renderRunning(0, 0, 0, mn, 0);
+  let checkedCount = 0, curLen = mn; const t0 = performance.now(), BATCH = 256; const gen = generateCombinations(charset, mn, mx);
+  if (timerInterval) clearInterval(timerInterval);
+  timerInterval = setInterval(() => { const el=(performance.now()-t0)/1000; document.querySelectorAll('#resultsContent .stats .val')[4]&&(document.querySelectorAll('#resultsContent .stats .val')[4].textContent=fmtTime(el)); }, 100);
+  while (!cancelled) {
+    const batch = []; for (let i = 0; i < BATCH; i++) { const n = gen.next(); if (n.done) break; batch.push(n.value); } if (!batch.length) break;
+    if (batch[0].length !== curLen) curLen = batch[0].length;
+    const hashes = await Promise.all(batch.map(c => sha256(buildInput(c))));
+    for (let k = 0; k < hashes.length; k++) {
+      if (hashes[k] === target) {
+        checkedCount += k + 1; const elapsed = (performance.now() - t0) / 1000, spd = Math.round(checkedCount / elapsed); const fullInput = buildInput(batch[k]);
+        if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+        rco.innerHTML = `<div class="result-ok"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/></svg>Znaleziono!</div>
+        <div class="ip-box"><div class="lbl">Odgadnięty tekst</div><div class="ip">${escHtml(batch[k])}</div></div>
+        <div class="sub-box"><div class="lbl">Pełny input do SHA-256</div><div class="val">${escHtml(fullInput)}</div></div>
+        <div class="stats" style="margin-top:.75rem"><div>Sprawdzono: <span class="val">${checkedCount.toLocaleString("pl")}</span></div><div class="right">Prędkość: <span class="val">${spd.toLocaleString("pl")} hash/s</span></div><div style="grid-column:span 2">Czas łącznie: <span class="val">${fmtTime(elapsed)}</span></div></div>`;
+        setDisabled(false); document.getElementById("btnStop").classList.add("hidden"); document.getElementById("btnStart").classList.remove("hidden"); return;
+      }
+    }
+    checkedCount += batch.length;
+    if (checkedCount % (BATCH * 50) < BATCH) { const elapsed = (performance.now() - t0) / 1000, spd = elapsed > 0 ? Math.round(checkedCount / elapsed) : 0; renderRunning(checkedCount, spd, Math.min(checkedCount / total * 100, 99.9), curLen, elapsed); await new Promise(r => setTimeout(r, 0)); }
+  }
+  if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+  setDisabled(false); document.getElementById("btnStop").classList.add("hidden"); document.getElementById("btnStart").classList.remove("hidden");
+  const finalElapsed = (performance.now() - t0) / 1000;
+  if (cancelled) { rc.classList.add("hidden"); }
+  else { rco.innerHTML = `<div class="result-fail"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></svg>Nie znaleziono</div><p style="font-size:.75rem;color:var(--muted-fg);margin-top:.75rem">Przeszukano ${checkedCount.toLocaleString("pl")} kombinacji (długość ${mn}–${mx}) w ${fmtTime(finalElapsed)}. Spróbuj zwiększyć zakres lub dodać więcej grup znaków.</p>`; }
+}
+function escHtml(s) { return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); }
+</script>
+</body>
+</html>
